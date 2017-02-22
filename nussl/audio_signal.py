@@ -296,7 +296,7 @@ class AudioSignal(object):
         return np.abs(self.stft_data) ** 2
 
     @property
-    def mangitude_spectrogram_data(self):
+    def magnitude_spectrogram_data(self):
         """ (:obj:`np.ndarray`): Returns a real valued 2D ``np.array`` with magnitude spectrogram data.
         The power spectrogram is defined as Re(STFT). Same shape as ``self.stft_data``.
         Raises:
@@ -920,7 +920,7 @@ class AudioSignal(object):
         self._verify_get_channel(n)
 
         # np.array helps with duck typing
-        return self._get_axis(np.array(self.mangitude_spectrogram_data), self._STFT_CHAN, n)
+        return self._get_axis(np.array(self.magnitude_spectrogram_data), self._STFT_CHAN, n)
 
     def to_mono(self, overwrite=False):
         """ Converts ``self.audio_data`` to mono by averaging every sample.

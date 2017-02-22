@@ -16,6 +16,7 @@ from rpca import RPCA
 from ideal_mask import IdealMask
 from projet import Projet
 from ica import ICA
+from melodia import Melodia
 from evaluation import Evaluation
 
 __version__ = '0.1.5a10'

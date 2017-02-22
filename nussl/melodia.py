@@ -7,8 +7,8 @@ import separation_base
 import constants
 from audio_signal import AudioSignal
 import vamp
-import librosa
 import matplotlib.pyplot as plt
+from scipy.ndimage.filters import convolve
 
 class Melodia(separation_base.SeparationBase):
     """Implements melody extraction using Melodia.
@@ -38,7 +38,7 @@ class Melodia(separation_base.SeparationBase):
         self.use_librosa_stft = use_librosa_stft
         self.minimum_frequency = 55.0 if minimum_frequency is None else float(minimum_frequency)
         self.maximum_frequency = 1760.0 if maximum_frequency is None else float(maximum_frequency)
-        self.voicing_tolerance = 0.2 if voicing_tolerance is None else float(voicing_tolerance)
+        self.voicing_tolerance = 0.5 if voicing_tolerance is None else float(voicing_tolerance)
         self.minimum_peak_salience = 0.0 if minimum_peak_salience is None else float(minimum_peak_salience)
         self.stft = None
         self.melody = None
@@ -113,13 +113,12 @@ class Melodia(separation_base.SeparationBase):
 
         melody_signal = np.asarray(melody_signal)
         melody_signal *= 0.8 / float(np.max(melody_signal))
-
+        melody_signal = [melody_signal for channel in range(self.audio_signal.num_channels)]
+        melody_signal = np.asarray(melody_signal)
+        melody_signal = melody_signal[:, 0:self.audio_signal.signal_length]
         melody_signal = AudioSignal(audio_data_array=melody_signal, sample_rate=sample_rate)
-        melody_signal.stft_params = self.audio_signal.stft_params
-        melody_signal.stft()
-        melody_signal.istft(self.stft_params.window_length, self.stft_params.hop_length, self.stft_params.window_type,
-                              overwrite=True, use_librosa=self.use_librosa_stft,
-                              truncate_to_length=self.audio_signal.signal_length)
+        melody_signal.write_audio_to_file('melody.wav')
+
         self.melody_signal = melody_signal
         return melody_signal
 
@@ -127,11 +126,15 @@ class Melodia(separation_base.SeparationBase):
         normalized_melody_stft = np.abs(melody_signal.stft())
         normalized_melody_stft /= np.max(normalized_melody_stft)
 
-        normalized_mixture_stft = np.abs(self.audio_signal.stft())
-        normalized_mixture_stft /= np.max(normalized_mixture_stft)
+        # Need to threshold the melody stft since the synthesized F0 sequence overtones are at different weights.
+        normalized_melody_stft = normalized_melody_stft > 1e-2
+        normalized_melody_stft = normalized_melody_stft.astype(float)
+        mask = np.empty(self.audio_signal.stft().shape)
 
-        mask = np.divide(normalized_melody_stft + constants.EPSILON,
-                         np.maximum(normalized_melody_stft, normalized_mixture_stft) + constants.EPSILON)
+        # Smoothing the mask row-wise using a low-pass filter to get rid of discontuinities in the mask.
+        kernel =  np.full((1, 20), 1/20.)
+        for channel in range(self.audio_signal.num_channels):
+            mask[:, :, channel] = convolve(normalized_melody_stft[:, :, channel], kernel)
         return mask
 
     def run(self):
@@ -153,7 +156,7 @@ class Melodia(separation_base.SeparationBase):
         # separate the mixture foreground melody by masking
         if self.melody_signal is None:
             self.extract_melody()
-            self.create_melody_signal(50)
+            self.create_melody_signal(100)
 
         foreground_mask = self.create_harmonic_mask(self.melody_signal)
         foreground_mask[0:self.high_pass_cutoff, :] = 0

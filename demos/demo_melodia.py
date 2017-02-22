@@ -7,7 +7,8 @@ if not path in sys.path:
 
 from nussl import AudioSignal, Melodia
 
-mixture = AudioSignal('../input/mixture/mixture.wav', offset=30, duration=60)
+mixture = AudioSignal('../input/mixture/mixture.wav', duration = 60, offset = 45)
+
 melodia = Melodia(input_audio_signal=mixture)
 melodia.run()
 sources = melodia.make_audio_signals()

@@ -2,15 +2,15 @@
     "FT2D": {
         "Background": {
             "Images": {
-                "Image to Spatial": 5.14881771196814,
-                "Source to Artifact": 4.088699146066113,
-                "Source to Distortion": 2.979153417928865,
-                "Source to Interference": 14.394559878907883
+                "Image to Spatial": 4.336480332714894,
+                "Source to Artifact": 3.721768265421402,
+                "Source to Distortion": 2.829257244001684,
+                "Source to Interference": 19.41337636084151
             },
             "Sources": {
-                "Source to Artifact": 3.119065868237714,
-                "Source to Distortion": 2.7660196765920486,
-                "Source to Interference": 15.565833917799718
+                "Source to Artifact": 2.7920948261722334,
+                "Source to Distortion": 2.763027747157052,
+                "Source to Interference": 26.356254885904676
             }
         },
         "Permutation": [
@@ -19,15 +19,15 @@
         ],
         "Vocals": {
             "Images": {
-                "Image to Spatial": 15.399766467774786,
-                "Source to Artifact": 7.611053971480992,
-                "Source to Distortion": 2.1484044997597045,
-                "Source to Interference": 4.0074061137201795
+                "Image to Spatial": 14.893342656739428,
+                "Source to Artifact": 7.30341002981294,
+                "Source to Distortion": -0.8276338789935018,
+                "Source to Interference": 0.9078011536323655
             },
             "Sources": {
-                "Source to Artifact": 6.337593543943212,
-                "Source to Distortion": 2.2504680219752826,
-                "Source to Interference": 5.306120414672872
+                "Source to Artifact": 6.06849880713781,
+                "Source to Distortion": -0.45449107720265636,
+                "Source to Interference": 1.5991297435092477
             }
         }
     },
@@ -63,18 +63,18 @@
             }
         }
     },
-    "Overlap-Add: FT2D": {
+    "Melodia": {
         "Background": {
             "Images": {
-                "Image to Spatial": 5.437758957189774,
-                "Source to Artifact": 4.03056963594298,
-                "Source to Distortion": 3.1028157273656696,
-                "Source to Interference": 14.790993289607197
+                "Image to Spatial": 7.063154515032966,
+                "Source to Artifact": 4.967667699407344,
+                "Source to Distortion": 3.474826892083602,
+                "Source to Interference": 14.96322621098718
             },
             "Sources": {
-                "Source to Artifact": 3.240211674482929,
-                "Source to Distortion": 2.8692107867102123,
-                "Source to Interference": 15.423104049613707
+                "Source to Artifact": 4.326838970154627,
+                "Source to Distortion": 3.8900036456255367,
+                "Source to Interference": 15.446071905180272
             }
         },
         "Permutation": [
@@ -83,15 +83,47 @@
         ],
         "Vocals": {
             "Images": {
-                "Image to Spatial": 16.134492639234466,
-                "Source to Artifact": 7.562038636423216,
-                "Source to Distortion": 1.9161686664341802,
-                "Source to Interference": 4.470194483499291
+                "Image to Spatial": 14.607134752490069,
+                "Source to Artifact": 8.364155840085424,
+                "Source to Distortion": 4.491266008784874,
+                "Source to Interference": 9.040122744601836
             },
             "Sources": {
-                "Source to Artifact": 6.4381932456601465,
-                "Source to Distortion": 2.384386615608623,
-                "Source to Interference": 5.442700747568331
+                "Source to Artifact": 7.360593598961036,
+                "Source to Distortion": 4.984595207134977,
+                "Source to Interference": 9.470103291292812
+            }
+        }
+    },
+    "Overlap-Add: FT2D": {
+        "Background": {
+            "Images": {
+                "Image to Spatial": 4.575882647614048,
+                "Source to Artifact": 3.8187670315747964,
+                "Source to Distortion": 2.962860331519452,
+                "Source to Interference": 18.849947155467042
+            },
+            "Sources": {
+                "Source to Artifact": 2.920525777902712,
+                "Source to Distortion": 2.8080702331838587,
+                "Source to Interference": 20.52325503604513
+            }
+        },
+        "Permutation": [
+            0,
+            1
+        ],
+        "Vocals": {
+            "Images": {
+                "Image to Spatial": 15.301617808923174,
+                "Source to Artifact": 7.384326044287645,
+                "Source to Distortion": -0.8555580952718506,
+                "Source to Interference": 1.5882330773210946
+            },
+            "Sources": {
+                "Source to Artifact": 6.173768165373543,
+                "Source to Distortion": 0.0598157014225255,
+                "Source to Interference": 2.217421798254543
             }
         }
     },

@@ -8,6 +8,11 @@ import separation_base
 import constants
 from audio_signal import AudioSignal
 from scipy.ndimage.filters import maximum_filter, minimum_filter
+from librosa import display
+import librosa
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
+from scipy.ndimage.filters import convolve
 
 
 class FT2D(separation_base.SeparationBase):
@@ -33,6 +38,10 @@ class FT2D(separation_base.SeparationBase):
 
         self.stft = None
         self.ft2d = None
+        self.bg_ft2d = []
+        self.fg_ft2d = []
+        self.bg_inversion = []
+        self.fg_inversion = []
 
         if do_mono:
             self.audio_signal.to_mono(overwrite=True)
@@ -87,7 +96,14 @@ class FT2D(separation_base.SeparationBase):
         bg_ft2d, fg_ft2d = self.filter_local_maxima(ft2d)
         bg_stft = np.fft.ifft2(bg_ft2d)
         fg_stft = np.fft.ifft2(fg_ft2d)
+        self.bg_inversion.append(bg_stft)
+        self.fg_inversion.append(fg_stft)
+        self.bg_ft2d.append(bg_ft2d)
+        self.fg_ft2d.append(fg_ft2d)
         bg_mask = bg_stft > fg_stft
+        #smoothing out the mask - maybe not helpful
+        kernel =  np.full((1, 5), 1/5.)
+        bg_mask = convolve(bg_mask, kernel)
         return bg_mask
 
     def filter_local_maxima(self, ft2d):
@@ -100,7 +116,7 @@ class FT2D(separation_base.SeparationBase):
         data_min = minimum_filter(data, self.neighborhood_size)
         diff = ((data_max - data_min) > threshold)
         maxima[diff == 0] = 0
-        maxima = np.maximum(maxima, np.fliplr(maxima), np.flipud(maxima))
+        maxima = np.maximum(maxima, np.flipud(np.fliplr(maxima)))
         maxima = np.fft.ifftshift(maxima)
         
         background_ft2d = np.multiply(maxima, ft2d)
@@ -126,3 +142,29 @@ class FT2D(separation_base.SeparationBase):
         self.foreground = self.audio_signal - self.background
         self.foreground.sample_rate = self.audio_signal.sample_rate
         return [self.background, self.foreground]
+
+    def plot(self, output_name, **kwargs):
+        fig = plt.gcf()
+
+        def plot_image(fig, location, matrix, title, x=None, y=None):
+            fig.add_subplot(location)
+            plt.title(title)
+            display.specshow(matrix, x_axis=x, y_axis=y, hop_length=.5*self.stft_params.hop_length)
+
+        gs = gridspec.GridSpec(6, 10)
+        for i in range(self.audio_signal.num_channels):
+            plot_image(fig, gs[0:2, 0:7], librosa.amplitude_to_db(np.abs(self.stft[:, :, i]), ref=np.max), 'Mixture STFT', 'time', 'log')
+            plot_image(fig, gs[0:2, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.ft2d[:, :, i]))), 'Mixture 2DFT')
+
+            plot_image(fig, gs[2:4, 0:7], librosa.amplitude_to_db(self.bg_inversion[i]), 'STFT from inverted background 2DFT', 'time',
+                 'log')
+            plot_image(fig, gs[2:4, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.bg_ft2d[i]))), 'Background 2DFT')
+
+            #plot_image(fig, gs[2, 0:7], librosa.amplitude_to_db(np.abs(self.background.stft()[:, :, i])), 'Background STFT', 'time', 'log')
+
+            plot_image(fig, gs[4:, 0:7], librosa.amplitude_to_db(np.abs(self.fg_inversion[i])), 'STFT from inverted foreground 2DFT',
+                 'time', 'log')
+            plot_image(fig, gs[4:, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.fg_ft2d[i]))), 'Foreground 2DFT')
+
+            #plot_image(fig, gs[4, 0:7], librosa.amplitude_to_db(np.abs(self.foreground.stft()[:, :, i])), 'Foreground STFT', 'time', 'log')
+            break

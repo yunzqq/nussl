@@ -12,7 +12,6 @@ import nussl
 mixture = nussl.AudioSignal('../input/mixture/mixture.wav', duration = 30, offset = 60)
 vocals = nussl.AudioSignal('../input/mixture/vocals.wav', duration = 30, offset = 60)
 background = mixture - vocals
-print str(mixture)
 
 evaluation = nussl.Evaluation(ground_truth = [background, vocals],
                               compute_permutation = False,
@@ -34,7 +33,6 @@ def evaluate(evaluation_object, sources, algorithm_name):
 ideal_mask = nussl.IdealMask(mixture, sources = [mixture - vocals, vocals])
 ideal_mask.run()
 sources = ideal_mask.make_audio_signals()
-print str(ideal_mask)
 
 evaluate(evaluation, sources, 'Ideal binary mask')
 
@@ -43,6 +41,14 @@ repet.run()
 sources = repet.make_audio_signals()
 
 evaluate(evaluation, sources, 'REPET')
+
+melodia = nussl.Melodia(mixture)
+melodia.run()
+sources = melodia.make_audio_signals()
+
+evaluate(evaluation, sources, 'Melodia')
+
+print evaluation.scores
 
 repet_sim = nussl.RepetSim(mixture)
 repet_sim.run()

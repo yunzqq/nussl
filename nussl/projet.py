@@ -47,6 +47,9 @@ class Projet(separation_base.SeparationBase):
         self.verbose = False if verbose is None else verbose
         if self.audio_signal.num_channels == 1:
             raise ValueError('Cannot run PROJET on a mono audio signal!')
+
+        self.P = None
+        self.Q = None
         
 
     def run(self):
@@ -67,9 +70,9 @@ class Projet(separation_base.SeparationBase):
         eps = 1e-20
         # initialize PSD and panning to random
         # P is size of flattened stft by number of sources (e.g. (F, T, 4)
-        P = np.abs(np.random.randn(F * T, num_sources), dtype='float32') + 1
+        self.P = np.abs(np.random.randn(F * T, num_sources), dtype='float32') + 1
         # Q is number of panning directions to look for by number of sources (e.g. 41 x 4)
-        Q = np.abs(np.random.randn(num_possible_panning_directions, num_sources), dtype='float32') + 1
+        self.Q = np.abs(np.random.randn(num_possible_panning_directions, num_sources), dtype='float32') + 1
 
 
         # compute panning profiles
@@ -112,36 +115,36 @@ class Projet(separation_base.SeparationBase):
                 print 'Iteration %d' % iteration
             # np.dot(Q.T, K.T) -> (e.g. (4, 41) by (41, 15) -> (4, 15)
             # (F*T, 4) by (4, 15) -> (F*T, 15).
-            sigma = np.dot(P, np.dot(Q.T, K.T))
+            sigma = np.dot(self.P, np.dot(self.Q.T, K.T))
             # np.dot(K, Q) -> (15, 41) x (41, 4) -> (15, 4)
             # (F*T, 15), (15, 4) -> (F*T, 4) / (F*T, 4)
             # updating P
-            P *= np.dot(1.0 / (sigma + eps), np.dot(K, Q)) / (np.dot(3 * sigma / (sigma ** 2 + V2 + eps), np.dot(K, Q)))
+            self.P *= np.dot(1.0 / (sigma + eps), np.dot(K, self.Q)) / (np.dot(3 * sigma / (sigma ** 2 + V2 + eps), np.dot(K, self.Q)))
 
             # the following line is an optional trick that enforces orthogonality of the spectrograms.
             # P*=(100+P)/(100+np.sum(P,axis=1)[...,None])
             # update sigma using updated P. transpose to fit into Q. (15, F*T)
-            sigma = np.dot(P, np.dot(Q.T, K.T)).T
+            sigma = np.dot(self.P, np.dot(self.Q.T, K.T)).T
             # updating Q
             # (41, 15) dot ((15, F*T) dot (F*T, 4) - > (15, 4) dot ((41, 15) dot (15, 4) -> (41, 4))
             # (41, 4) dot (41, 15), [(15, F*T), (F*T, 4)] -> (15, 4)
             # (41, 4)
 
-            Q *= np.dot(K.T, np.dot(1.0 / (sigma + eps), P)) / np.dot(K.T, np.dot(3 * sigma / (sigma ** 2 + V2.T + eps), P))
+            self.Q *= np.dot(K.T, np.dot(1.0 / (sigma + eps), self.P)) / np.dot(K.T, np.dot(3 * sigma / (sigma ** 2 + V2.T + eps), self.P))
 
         # final separation
         # 2 by 15
         recompose_matrix = np.linalg.pinv(projection_matrix)  # IxM
 
         # final sigma, is (F*T, 15)
-        sigma = np.dot(P, np.dot(Q.T, K.T))
+        sigma = np.dot(self.P, np.dot(self.Q.T, K.T))
         # project mixtures again? (F*T, 15)
         C = np.dot(np.reshape(self.stft, (F * T, I)), projection_matrix.T)
 
         self.sources = []
 
         for j in range(num_sources):
-            sigma_j = np.outer(P[:, j], np.dot(Q[:, j].T, K.T))
+            sigma_j = np.outer(self.P[:, j], np.dot(self.Q[:, j].T, K.T))
             source_stft = sigma_j / sigma * C
             source_stft = np.dot(source_stft, recompose_matrix.T)
             source_stft = np.reshape(source_stft, (F, T, I))

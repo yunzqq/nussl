@@ -27,14 +27,14 @@ class FT2D(separation_base.SeparationBase):
         use_librosa_stft: (Optional) (bool) Calls librosa's stft function instead of nussl's
 
     """
-    def __init__(self, input_audio_signal, high_pass_cutoff=None, neighborhood_size=None,
+    def __init__(self, input_audio_signal, high_pass_cutoff=None, footprint=None,
                  do_mono=False, use_librosa_stft=constants.USE_LIBROSA_STFT):
         super(FT2D, self).__init__(input_audio_signal=input_audio_signal)
         self.high_pass_cutoff = 100.0 if high_pass_cutoff is None else float(high_pass_cutoff)
         self.background = None
         self.foreground = None
         self.use_librosa_stft = use_librosa_stft
-        self.neighborhood_size = (1, 25) if neighborhood_size is None else neighborhood_size
+        self.footprint = np.ones((1, 25)) if footprint is None else footprint
 
         self.stft = None
         self.ft2d = None
@@ -66,17 +66,28 @@ class FT2D(separation_base.SeparationBase):
 
         # separate the mixture background by masking
         background_stft = []
+        foreground_stft = []
         for i in range(self.audio_signal.num_channels):
             background_mask = self.compute_ft2d_mask(self.ft2d[:, :, i])
             background_mask[0:self.high_pass_cutoff, :] = 1  # high-pass filter the foreground
 
             # apply mask
+            # stft_with_mask = self.bg_inversion[i]*np.exp(1j*np.angle(self.stft[:, :, i])) #
             stft_with_mask = background_mask * self.stft[:, :, i]
             background_stft.append(stft_with_mask)
+            #stft_with_mask = self.fg_inversion[i] * np.exp(1j * np.angle(self.stft[:, :, i]))  # background_mask * self.stft[:, :, i]
+            stft_with_mask = (1 - background_mask) * self.stft[:, :, i]
+            foreground_stft.append(stft_with_mask)
 
         background_stft = np.array(background_stft).transpose((1, 2, 0))
         self.background = AudioSignal(stft=background_stft, sample_rate=self.audio_signal.sample_rate)
         self.background.istft(self.stft_params.window_length, self.stft_params.hop_length, self.stft_params.window_type,
+                              overwrite=True, use_librosa=self.use_librosa_stft,
+                              truncate_to_length=self.audio_signal.signal_length)
+
+        foreground_stft = np.array(foreground_stft).transpose((1, 2, 0))
+        self.foreground = AudioSignal(stft=foreground_stft, sample_rate=self.audio_signal.sample_rate)
+        self.foreground.istft(self.stft_params.window_length, self.stft_params.hop_length, self.stft_params.window_type,
                               overwrite=True, use_librosa=self.use_librosa_stft,
                               truncate_to_length=self.audio_signal.signal_length)
 
@@ -85,7 +96,7 @@ class FT2D(separation_base.SeparationBase):
         #     self.background.set_active_region_to_default()
         #     self.background.crop_signal(0, self.background.signal_length - self.audio_signal.signal_length)
 
-        return self.background
+        return self.background, self.foreground
     
     def _compute_spectrum(self):
         self.stft = self.audio_signal.stft(overwrite=True, remove_reflection=True, use_librosa=self.use_librosa_stft)
@@ -102,8 +113,8 @@ class FT2D(separation_base.SeparationBase):
         self.fg_ft2d.append(fg_ft2d)
         bg_mask = bg_stft > fg_stft
         #smoothing out the mask - maybe not helpful
-        kernel =  np.full((1, 5), 1/5.)
-        bg_mask = convolve(bg_mask, kernel)
+        #kernel =  np.full((1, 5), 1/5.)
+        #bg_mask = convolve(bg_mask, kernel)
         return bg_mask
 
     def filter_local_maxima(self, ft2d):
@@ -111,12 +122,14 @@ class FT2D(separation_base.SeparationBase):
         data = data / np.max(data)
         threshold = np.std(data)
         
-        data_max = maximum_filter(data, self.neighborhood_size)
+        data_max = maximum_filter(data, footprint = self.footprint)
         maxima = (data == data_max)
-        data_min = minimum_filter(data, self.neighborhood_size)
+        data_min = minimum_filter(data, footprint = self.footprint)
         diff = ((data_max - data_min) > threshold)
         maxima[diff == 0] = 0
         maxima = np.maximum(maxima, np.flipud(np.fliplr(maxima)))
+        #maxima[0:maxima.shape[0]/2, 0:maxima.shape[1]/2] = 0
+        #maxima[maxima.shape[0] / 2:, maxima.shape[1] / 2:] = 0
         maxima = np.fft.ifftshift(maxima)
         
         background_ft2d = np.multiply(maxima, ft2d)
@@ -139,8 +152,8 @@ class FT2D(separation_base.SeparationBase):
         if self.background is None:
             return None
 
-        self.foreground = self.audio_signal - self.background
-        self.foreground.sample_rate = self.audio_signal.sample_rate
+        #self.foreground = self.audio_signal - self.background
+        #self.foreground.sample_rate = self.audio_signal.sample_rate
         return [self.background, self.foreground]
 
     def plot(self, output_name, **kwargs):

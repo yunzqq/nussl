@@ -51,7 +51,7 @@ class IdealMask(separation_base.SeparationBase):
         self.estimated = []
 
         for source in self.sources:
-            mask = np.divide(np.abs(source.stft), self.magnitude_spectrogram)
+            mask = np.abs(source.stft) >= (self.magnitude_spectrogram - np.abs(source.stft))
             estimated_stft = np.multiply(mask, self.stft)
             self.estimated.append(AudioSignal(stft = estimated_stft, sample_rate=self.audio_signal.sample_rate))
             self.estimated[-1].istft(self.stft_params.window_length, self.stft_params.hop_length,

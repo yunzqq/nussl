@@ -15,6 +15,7 @@ from overlap_add import OverlapAdd
 from rpca import RPCA
 from ideal_mask import IdealMask
 from projet import Projet
+from projet_light import ProjetLight
 from ica import ICA
 from melodia import Melodia
 from evaluation import Evaluation

@@ -48,7 +48,7 @@ class ProjetLight(separation_base.SeparationBase):
         self.num_panning_directions = 41 if num_panning_directions is None else num_panning_directions
         self.num_projections = 15 if num_projections is None else num_projections
         self.verbose = False if verbose is None else verbose
-        self.num_components = 120 if num_components is None else num_components
+        self.num_components = 150 if num_components is None else num_components
         if self.audio_signal.num_channels == 1:
             raise ValueError('Cannot run PROJET on a mono audio signal!')
 
@@ -69,10 +69,11 @@ class ProjetLight(separation_base.SeparationBase):
         self._compute_spectrum()
 
         (F, T, I) = self.stft.shape
-        magnitude_spectrogram = np.mean(np.abs(self.stft) ** 2, axis = -1)
+        magnitude_spectrogram = np.abs(self.stft) ** 2
+        magnitude_spectrogram = np.reshape(magnitude_spectrogram, (F, T*I))
 
         model = NMF(n_components=self.num_components)
-        print 'Fitting model to mean spectrogram'
+        print 'Fitting model to spectrogram'
         model.fit(magnitude_spectrogram.T)
 
         num_sources = self.num_sources
@@ -114,8 +115,11 @@ class ProjetLight(separation_base.SeparationBase):
         print 'Compressing projections'
         V = np.abs(C).astype(np.float32)
         V2 = V ** 2
-        V2 = np.reshape(V2, (F, num_projections*T))
-        V2 = model.transform(V2.T).T
+        compressed = np.empty((self.num_components, T, num_projections))
+        for num_projection in range(num_projections):
+            print 'Projection %d' % num_projection
+            compressed[:, :, num_projection] = model.transform(V2[:, :, num_projection].T).T
+        V2 = compressed
         V2 = np.reshape(V2, (self.num_components*T, num_projections))
 
         C = []  # release memory

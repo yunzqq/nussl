@@ -10,7 +10,7 @@ print nussl
 
 mixture = nussl.AudioSignal('../input/panned_mixture_four_sources.wav')
 
-projet = nussl.ProjetLight(mixture, verbose = True, num_iterations = 50, num_sources = 4)
+projet = nussl.ProjetLight(mixture, verbose = True, num_iterations = 200, num_sources = 4)
 projet.run()
 sources = projet.make_audio_signals()
 

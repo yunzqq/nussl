@@ -1,2 +1,2 @@
 from randomized_svd import RandomizedSVD
-from sklearn.decomposition import NMF
+from nmf_tensorflow import NMF

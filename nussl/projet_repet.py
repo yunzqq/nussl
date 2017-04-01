@@ -24,10 +24,11 @@ import separation_base
 import constants
 from audio_signal import AudioSignal
 from transformers import RandomizedSVD, NMF
+from ft2d import FT2D
 
 import matplotlib.pyplot as plt
 
-class ProjetLight(separation_base.SeparationBase):
+class ProjetRepet(separation_base.SeparationBase):
     """Implements foreground/background separation using the 2D Fourier Transform
 
     Parameters:
@@ -39,22 +40,22 @@ class ProjetLight(separation_base.SeparationBase):
     def __init__(self, input_audio_signal, use_librosa_stft=constants.USE_LIBROSA_STFT, num_sources=None,
                  num_iterations=None, num_panning_directions=None, num_projections=None, verbose=None,
                  num_components=None):
-        super(ProjetLight, self).__init__(input_audio_signal=input_audio_signal)
+        super(ProjetRepet, self).__init__(input_audio_signal=input_audio_signal)
         self.sources = None
         self.use_librosa_stft = use_librosa_stft
         self.stft = None
         self.num_sources = 6 if num_sources is None else num_sources
-        self.num_iterations = 200 if num_iterations is None else num_iterations
+        self.num_iterations = 50 if num_iterations is None else num_iterations
         self.num_panning_directions = 41 if num_panning_directions is None else num_panning_directions
         self.num_projections = 15 if num_projections is None else num_projections
         self.verbose = False if verbose is None else verbose
-        self.num_components = 150 if num_components is None else num_components
+        self.num_components = 400 if num_components is None else num_components
         if self.audio_signal.num_channels == 1:
             raise ValueError('Cannot run PROJET on a mono audio signal!')
 
         self.P = None
         self.Q = None
-        
+
 
     def run(self):
         """
@@ -69,12 +70,15 @@ class ProjetLight(separation_base.SeparationBase):
         self._compute_spectrum()
 
         (F, T, I) = self.stft.shape
-        magnitude_spectrogram = np.abs(self.stft) ** 2
-        magnitude_spectrogram = np.reshape(magnitude_spectrogram, (F, T*I))
-
+        repet = FT2D(self.audio_signal)
+        repet.run()
+        bg, fg = repet.make_audio_signals()
+        foreground_spectrogram = np.abs(fg.stft()) ** 2
+        foreground_spectrogram = np.mean(foreground_spectrogram, axis=-1)
         model = NMF(n_components=self.num_components)
-        print 'Fitting model to spectrogram'
-        model.fit(magnitude_spectrogram.T)
+        print 'Fitting model to foreground'
+        model.fit(foreground_spectrogram.T)
+
 
         num_sources = self.num_sources
         num_possible_panning_directions = self.num_panning_directions
@@ -115,13 +119,17 @@ class ProjetLight(separation_base.SeparationBase):
         print 'Compressing projections'
         V = np.abs(C).astype(np.float32)
         V2 = V ** 2
-        compressed = np.empty((self.num_components, T, num_projections))
-        for num_projection in range(num_projections):
-            print 'Projection %d' % num_projection
-            compressed[:, :, num_projection] = model.transform(V2[:, :, num_projection].T).T
-        V2 = compressed
-        V2 = np.reshape(V2, (self.num_components*T, num_projections))
+        V2 = np.reshape(V2, (F, T * num_projections))
+        V2 = model.transform(V2.T).T
 
+        # compressed = np.empty((self.num_components, T, num_projections))
+        # for num_projection in range(num_projections):
+        #     print 'Projection %d' % num_projection
+        #     compressed[:, :, num_projection] = model.transform(V2[:, :, num_projection].T).T
+        # V2 = compressed
+
+        print V2.shape, (self.num_components, T, num_projections)
+        V2 = np.reshape(V2, (self.num_components * T, num_projections))
         C = []  # release memory
 
         # main iterations
@@ -136,9 +144,8 @@ class ProjetLight(separation_base.SeparationBase):
             # updating P
             self.P *= np.dot(1.0 / (sigma + eps), np.dot(K, self.Q)) / \
                       (np.dot(3 * sigma / (sigma ** 2 + V2 + eps), np.dot(K, self.Q)))
-            # self.P = np.nan_to_num(self.P) + 1e-8
             # the following line is an optional trick that enforces orthogonality of the spectrograms.
-            # P*=(100+P)/(100+np.sum(P,axis=1)[...,None])
+            # self.P*=(100+self.P)/(100+np.sum(self.P,axis=1)[...,None])
             # update sigma using updated P. transpose to fit into Q. (15, F*T)
             sigma = np.dot(self.P, np.dot(self.Q.T, K.T)).T
             # updating Q
@@ -149,8 +156,6 @@ class ProjetLight(separation_base.SeparationBase):
             self.Q *= np.dot(K.T, np.dot(1.0 / (sigma + eps), self.P)) / \
                       np.dot(K.T, np.dot(3 * sigma / (sigma ** 2 + V2.T + eps), self.P))
 
-
-            # self.Q = np.nan_to_num(self.Q) + 1e-8
 
         # final separation
         # 2 by 15
@@ -176,14 +181,14 @@ class ProjetLight(separation_base.SeparationBase):
             source_stft = np.dot(source_stft, recompose_matrix.T)
             source_stft = np.reshape(source_stft, (F, T, I))
             source = AudioSignal(stft = source_stft, sample_rate = self.audio_signal.sample_rate)
-            source.istft(self.stft_params.window_length, self.stft_params.hop_length, 
-                        self.stft_params.window_type, overwrite=True, 
-                        use_librosa=self.use_librosa_stft, 
+            source.istft(self.stft_params.window_length, self.stft_params.hop_length,
+                        self.stft_params.window_type, overwrite=True,
+                        use_librosa=self.use_librosa_stft,
                         truncate_to_length=self.audio_signal.signal_length)
             self.sources.append(source)
-        
+
         return self.sources
-    
+
     def _compute_spectrum(self):
         self.stft = self.audio_signal.stft(overwrite=True, remove_reflection=True, use_librosa=self.use_librosa_stft)
 
@@ -218,7 +223,7 @@ class ProjetLight(separation_base.SeparationBase):
         # normalize res by rms along each row
         res /= np.sqrt(np.sum(res ** 2, axis=1))[..., None]
         return res
-    
+
     def make_audio_signals(self):
         """ Returns the background and foreground audio signals. You must have run FT2D.run() prior
         to calling this function. This function will return None if run() has not been called.

@@ -3,12 +3,9 @@
 
 import numpy as np
 
-import spectral_utils
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
-from scipy.ndimage.filters import maximum_filter, minimum_filter
-
+from .. import AudioSignal
 
 class IdealMask(separation_base.SeparationBase):
     """Separate sources using the ideal binary or soft mask from ground truth

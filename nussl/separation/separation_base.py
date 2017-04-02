@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import audio_signal
-import spectral_utils
-import constants
+from .. import constants
+from .. import spectral_utils
+from .. import audio_signal
 
 import copy
 import json
-import utils
+import nussl.utils
 import numpy as np
 import inspect
 
@@ -93,7 +93,7 @@ class SeparationBase(object):
         d = copy.copy(o.__dict__)
         for k, v in d.items():
             if isinstance(v, np.ndarray):
-                d[k] = utils.json_ready_numpy_array(v)
+                d[k] = nussl.utils.json_ready_numpy_array(v)
             if isinstance(v, audio_signal.AudioSignal) or isinstance(v, spectral_utils.StftParams):
                 d[k] = v.to_json()
 
@@ -164,17 +164,17 @@ class SeparationBaseDecoder(json.JSONDecoder):
             args = dict((k.encode('ascii'), json_dict[k]) for k in required_args)
 
             # make a new instance of separation class
-            seperator = class_(signal, **args)
+            separator = class_(signal, **args)
 
             # fill out the rest of the fields
             for k, v in json_dict.items():
                 if isinstance(v, dict) and constants.NUMPY_JSON_KEY in v:
-                    seperator.__dict__[k] = utils.json_numpy_obj_hook(v[constants.NUMPY_JSON_KEY])
+                    separator.__dict__[k] = nussl.utils.json_numpy_obj_hook(v[constants.NUMPY_JSON_KEY])
                 elif isinstance(v, basestring) and audio_signal.__name__ in v: # TODO: python3-ify this
-                    seperator.__dict__[k] = audio_signal.AudioSignal.from_json(v)
+                    separator.__dict__[k] = audio_signal.AudioSignal.from_json(v)
                 else:
-                    seperator.__dict__[k] = v if not isinstance(v, unicode) else v.encode('ascii')
+                    separator.__dict__[k] = v if not isinstance(v, unicode) else v.encode('ascii')
 
-            return seperator
+            return separator
         else:
             return json_dict

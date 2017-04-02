@@ -3,10 +3,9 @@
 
 import numpy as np
 
-import spectral_utils
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
+from .. import AudioSignal
 
 class RPCA(separation_base.SeparationBase):
     """Implements foreground/background separation using RPCA

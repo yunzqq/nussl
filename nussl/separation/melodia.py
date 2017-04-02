@@ -2,13 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-
-import separation_base
-import constants
-from audio_signal import AudioSignal
 import vamp
-import matplotlib.pyplot as plt
 from scipy.ndimage.filters import convolve
+
+from .. import constants
+import separation_base
+from .. import AudioSignal
 
 class Melodia(separation_base.SeparationBase):
     """Implements melody extraction using Melodia.

@@ -5,9 +5,9 @@ import numpy as np
 import scipy.fftpack as scifft
 import scipy.spatial.distance
 
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
+from .. import AudioSignal
 
 
 class Repet(separation_base.SeparationBase):

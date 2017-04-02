@@ -1,18 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import numpy as np
-
-import spectral_utils
-import separation_base
-import constants
-from audio_signal import AudioSignal
-from scipy.ndimage.filters import maximum_filter, minimum_filter
-from librosa import display
 import librosa
 import matplotlib.pyplot as plt
+import numpy as np
+from librosa import display
 from matplotlib import gridspec
-from scipy.ndimage.filters import convolve
+from scipy.ndimage.filters import maximum_filter, minimum_filter
+
+from .. import constants
+import separation_base
+from nussl.audio_signal import AudioSignal
 
 
 class FT2D(separation_base.SeparationBase):

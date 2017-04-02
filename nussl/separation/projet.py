@@ -20,14 +20,12 @@ modified by Ethan Manilow and Prem Seetharaman for incorporation into nussl.
 
 import numpy as np
 
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
-from transformers import RandomizedSVD, NMF
+from .. import AudioSignal
 
-import matplotlib.pyplot as plt
 
-class ProjetLite(separation_base.SeparationBase):
+class Projet(separation_base.SeparationBase):
     """Implements foreground/background separation using the 2D Fourier Transform
 
     Parameters:
@@ -37,9 +35,8 @@ class ProjetLite(separation_base.SeparationBase):
 
     """
     def __init__(self, input_audio_signal, use_librosa_stft=constants.USE_LIBROSA_STFT, num_sources=None,
-                 num_iterations=None, num_panning_directions=None, num_projections=None, verbose=None,
-                 num_components=None):
-        super(ProjetLite, self).__init__(input_audio_signal=input_audio_signal)
+                 num_iterations=None, num_panning_directions=None, num_projections=None, verbose=None):
+        super(Projet, self).__init__(input_audio_signal=input_audio_signal)
         self.sources = None
         self.use_librosa_stft = use_librosa_stft
         self.stft = None
@@ -48,13 +45,12 @@ class ProjetLite(separation_base.SeparationBase):
         self.num_panning_directions = 41 if num_panning_directions is None else num_panning_directions
         self.num_projections = 15 if num_projections is None else num_projections
         self.verbose = False if verbose is None else verbose
-        self.num_components = 100 if num_components is None else num_components
         if self.audio_signal.num_channels == 1:
             raise ValueError('Cannot run PROJET on a mono audio signal!')
 
         self.P = None
         self.Q = None
-
+        
 
     def run(self):
         """
@@ -67,22 +63,14 @@ class ProjetLite(separation_base.SeparationBase):
 
         """
         self._compute_spectrum()
-
         (F, T, I) = self.stft.shape
-        magnitude_spectrogram = np.abs(self.stft) ** 2
-        magnitude_spectrogram = np.reshape(magnitude_spectrogram, (F, T*I))
-
-        model = NMF(n_components=self.num_components)
-        print 'Fitting model to spectrogram'
-        model.fit(magnitude_spectrogram.T)
-
         num_sources = self.num_sources
         num_possible_panning_directions = self.num_panning_directions
         num_projections = self.num_projections
         eps = 1e-20
         # initialize PSD and panning to random
         # P is size of flattened stft by number of sources (e.g. (F, T, 4)
-        self.P = np.abs(np.random.randn(self.num_components*T, num_sources), dtype='float32') + 1
+        self.P = np.abs(np.random.randn(F * T, num_sources), dtype='float32') + 1
         # Q is number of panning directions to look for by number of sources (e.g. 41 x 4)
         self.Q = np.abs(np.random.randn(num_possible_panning_directions, num_sources), dtype='float32') + 1
 
@@ -108,25 +96,17 @@ class ProjetLite(separation_base.SeparationBase):
         # compute the projections and store their spectrograms and squared spectrograms
         # (F, T, 2) (15, 2). first by 2,1 axes -> (F, T, 2) x (2, 15) -> (F, T, 15). and then flatten it.
         C = np.tensordot(self.stft, projection_matrix, axes=(2, 1))
-
-
+        # for p in range(C.shape[-1]):
+        #     proj = AudioSignal(stft=C[:, :, p, np.newaxis], sample_rate=self.audio_signal.sample_rate)
+        #     proj.istft(self.stft_params.window_length, self.stft_params.hop_length,
+        #                  self.stft_params.window_type, overwrite=True,
+        #                  use_librosa=self.use_librosa_stft,
+        #                  truncate_to_length=self.audio_signal.signal_length)
+        #     proj.write_audio_to_file('proj_output_%d.wav' % p)
+        C = np.reshape(C, (F * T, num_projections))
         # NOTE: C now the same shape as P.
-
-        print 'Compressing projections'
         V = np.abs(C).astype(np.float32)
         V2 = V ** 2
-        V2 = np.reshape(V2, (F, T * num_projections))
-        V2 = model.transform(V2.T).T
-        # compressed = np.empty((self.num_components, T, num_projections))
-        # for num_projection in range(num_projections):
-        #     print 'Projection %d' % num_projection
-        #     compressed[:, :, num_projection] = model.transform(V2[:, :, num_projection].T).T
-        # V2 = compressed
-
-        # V2 = model.components_.T
-
-        print V2.shape, (self.num_components, T, num_projections)
-        V2 = np.reshape(V2, (self.num_components * T, num_projections))
         C = []  # release memory
 
         # main iterations
@@ -139,9 +119,8 @@ class ProjetLite(separation_base.SeparationBase):
             # np.dot(K, Q) -> (15, 41) x (41, 4) -> (15, 4)
             # (F*T, 15), (15, 4) -> (F*T, 4) / (F*T, 4)
             # updating P
-            self.P *= np.dot(1.0 / (sigma + eps), np.dot(K, self.Q)) / \
-                      (np.dot(3 * sigma / (sigma ** 2 + V2 + eps), np.dot(K, self.Q)))
-            # self.P = np.nan_to_num(self.P) + 1e-8
+            self.P *= np.dot(1.0 / (sigma + eps), np.dot(K, self.Q)) / (np.dot(3 * sigma / (sigma ** 2 + V2 + eps), np.dot(K, self.Q)))
+
             # the following line is an optional trick that enforces orthogonality of the spectrograms.
             # P*=(100+P)/(100+np.sum(P,axis=1)[...,None])
             # update sigma using updated P. transpose to fit into Q. (15, F*T)
@@ -151,22 +130,11 @@ class ProjetLite(separation_base.SeparationBase):
             # (41, 4) dot (41, 15), [(15, F*T), (F*T, 4)] -> (15, 4)
             # (41, 4)
 
-            self.Q *= np.dot(K.T, np.dot(1.0 / (sigma + eps), self.P)) / \
-                      np.dot(K.T, np.dot(3 * sigma / (sigma ** 2 + V2.T + eps), self.P))
-
-
-            # self.Q = np.nan_to_num(self.Q) + 1e-8
+            self.Q *= np.dot(K.T, np.dot(1.0 / (sigma + eps), self.P)) / np.dot(K.T, np.dot(3 * sigma / (sigma ** 2 + V2.T + eps), self.P))
 
         # final separation
         # 2 by 15
         recompose_matrix = np.linalg.pinv(projection_matrix)  # IxM
-        # expand back out P
-        print 'Expanding P'
-        print self.P.shape
-
-        self.P = np.reshape(self.P, (self.num_components, T*num_sources))
-        self.P = model.inverse_transform(self.P.T).T
-        self.P = np.reshape(self.P, (F * T, num_sources))
 
         # final sigma, is (F*T, 15)
         sigma = np.dot(self.P, np.dot(self.Q.T, K.T))
@@ -181,14 +149,14 @@ class ProjetLite(separation_base.SeparationBase):
             source_stft = np.dot(source_stft, recompose_matrix.T)
             source_stft = np.reshape(source_stft, (F, T, I))
             source = AudioSignal(stft = source_stft, sample_rate = self.audio_signal.sample_rate)
-            source.istft(self.stft_params.window_length, self.stft_params.hop_length,
-                        self.stft_params.window_type, overwrite=True,
-                        use_librosa=self.use_librosa_stft,
+            source.istft(self.stft_params.window_length, self.stft_params.hop_length, 
+                        self.stft_params.window_type, overwrite=True, 
+                        use_librosa=self.use_librosa_stft, 
                         truncate_to_length=self.audio_signal.signal_length)
             self.sources.append(source)
-
+        
         return self.sources
-
+    
     def _compute_spectrum(self):
         self.stft = self.audio_signal.stft(overwrite=True, remove_reflection=True, use_librosa=self.use_librosa_stft)
 
@@ -223,7 +191,7 @@ class ProjetLite(separation_base.SeparationBase):
         # normalize res by rms along each row
         res /= np.sqrt(np.sum(res ** 2, axis=1))[..., None]
         return res
-
+    
     def make_audio_signals(self):
         """ Returns the background and foreground audio signals. You must have run FT2D.run() prior
         to calling this function. This function will return None if run() has not been called.

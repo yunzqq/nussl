@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import numpy as np
 import warnings
 
-import spectral_utils
+import numpy as np
+
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
-import utils
+from .. import utils
 
 
 class RepetSim(separation_base.SeparationBase):
@@ -159,9 +158,9 @@ class RepetSim(separation_base.SeparationBase):
         similarity_indices = []
         for i in range(self.audio_signal.stft_length):
             cur_indices = utils.find_peak_indices(self.similarity_matrix[i, :],
-                                                  self.max_repeating_frames,
-                                                  min_dist=self.min_distance_between_frames,
-                                                  threshold=self.similarity_threshold)
+                                                        self.max_repeating_frames,
+                                                        min_dist=self.min_distance_between_frames,
+                                                        threshold=self.similarity_threshold)
 
             # the first peak is always itself so we throw it out
             # we also want only self.max_repeating_frames peaks

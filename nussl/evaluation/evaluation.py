@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from audio_signal import AudioSignal
+from nussl.audio_signal import AudioSignal
 from mir_eval import separation
 import numpy as np
 import json

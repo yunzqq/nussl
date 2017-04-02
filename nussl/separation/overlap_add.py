@@ -2,17 +2,19 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import division
-import numpy as np
+
 import warnings
 
-import separation_base
-import constants
-import spectral_utils
-from audio_signal import AudioSignal
+import numpy as np
 
+from .. import constants
+import separation_base
+from .. import spectral_utils
+
+from ft2d import FT2D
+from .. import AudioSignal
 from repet import Repet
 from repet_sim import RepetSim
-from ft2d import FT2D
 
 
 class OverlapAdd(separation_base.SeparationBase):
@@ -155,7 +157,7 @@ class OverlapAdd(separation_base.SeparationBase):
                 # Oops. Can't find it in our dictionary
                 raise error
 
-        elif issubclass(value, separation_base.SeparationBase) and \
+        elif issubclass(value, nussl.separation.separation_base.SeparationBase) and \
                         value in self._valid_separation_methods.values():
             # The user gave us a class, so we use that
             self._separation_method = value

@@ -20,13 +20,12 @@ modified by Ethan Manilow and Prem Seetharaman for incorporation into nussl.
 
 import numpy as np
 
+from .. import constants
 import separation_base
-import constants
-from audio_signal import AudioSignal
-from transformers import RandomizedSVD, NMF
 from ft2d import FT2D
+from .. import AudioSignal
+from ..transformers import NMF
 
-import matplotlib.pyplot as plt
 
 class ProjetRepet(separation_base.SeparationBase):
     """Implements foreground/background separation using the 2D Fourier Transform

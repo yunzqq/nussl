@@ -30,6 +30,7 @@ if constants.USE_GPU:
     from basic_autoencoder import BasicAutoEncoder
     from context_deep_autoencoder import ContextDeepAutoEncoder
     from recurrent_autoencoder import RecurrentAutoEncoder
+    from variational_auto_encoder import VariationalAutoEncoder
 
 else:
     from sklearn.decomposition import NMF

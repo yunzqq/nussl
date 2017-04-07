@@ -18,11 +18,11 @@ class ContextDeepAutoEncoder(TransformerMixin):
 
         input_frame = Input(shape=(input_shape,))
 
-        self.encoded = Dense(2*encoding_dim, activation='softplus',
+        self.encoded = Dense(encoding_dim, activation='softplus',
                             activity_regularizer=regularizers.l1(activation_sparsity))(input_frame)
         self.encoded = Dense(encoding_dim, activation="softplus",
                              activity_regularizer=regularizers.l1(activation_sparsity))(self.encoded)
-        self.decoded = Dense(2*encoding_dim, activation='softplus',
+        self.decoded = Dense(encoding_dim, activation='softplus',
                              kernel_regularizer=regularizers.l2(template_sparsity))(self.encoded)
         self.decoded = Dense(output_shape, activation='softplus',
                              kernel_regularizer=regularizers.l2(template_sparsity))(self.decoded)

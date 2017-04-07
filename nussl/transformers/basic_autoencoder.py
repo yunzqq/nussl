@@ -53,15 +53,15 @@ class BasicAutoEncoder(TransformerMixin):
     def reconstruction_error(self, X):
         if not self.has_fit_been_run:
             raise ValueError("Model has not been fit! Run fit() before calling this.")
-        reconstruction = self.inverse_transform(X)
-        return np.linalg.norm(X - reconstruction, 'fro')
+        loss = self.error_measure(X, self.autoencoder.predict(X))
+        return loss
 
     def reconstruction_error_by_frame(self, X):
         if not self.has_fit_been_run:
             raise ValueError("Model has not been fit! Run fit() before calling this.")
 
-        reconstruction = self.inverse_transform(X)
-        return np.linalg.norm(X - reconstruction, axis=1)
+        loss = self.error_measure(X, self.autoencoder.predict(X), axis = 0)
+        return loss
 
     def inverse_transform(self, X):
         if not self.has_fit_been_run:
@@ -79,4 +79,12 @@ class BasicAutoEncoder(TransformerMixin):
 
     def kl_divergence_nmf(self, y_true, y_pred):
         return K.sum(y_true * (K.log(y_true + K.epsilon()) - K.log(y_pred + K.epsilon())) - y_true + y_pred)
+
+    def error_measure(self, y_true, y_pred, axis = None):
+        # y_true = y_true.astype(dtype=np.float64)
+        # y_pred = y_pred.astype(dtype=np.float64)
+        # return K.eval(K.sum(y_true * (K.log(y_true + K.epsilon()) - K.log(y_pred + K.epsilon())) - y_true + y_pred))
+        return np.sum(np.multiply(y_true, (np.log(y_true + K.epsilon()) - np.log(y_pred + K.epsilon())))
+                      - y_true + y_pred, axis=axis) \
+               / float(y_true.shape[0])
 

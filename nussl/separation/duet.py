@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
 
-import nussl.audio_signal
-import nussl.constants
-import nussl.separation.separation_base
-import nussl.spectral_utils
-import nussl.utils
+from .. import AudioSignal
+from .. import constants
+import separation_base
+from .. import spectral_utils
+from .. import utils
 
 
-class Duet(nussl.separation.separation_base.SeparationBase):
+class Duet(separation_base.SeparationBase):
     """Implements the Degenerate Unmixing Estimation Technique (DUET) algorithm.
 
     The DUET algorithm was originally proposed by S.Rickard and F.Dietrich for DOA estimation
@@ -98,9 +98,9 @@ class Duet(nussl.separation.separation_base.SeparationBase):
         fs = self.sample_rate
 
         # Compute the stft of the two channel mixtures
-        stft1, psd1, frequency_vector, time_vector = nussl.spectral_utils.e_stft_plus(self.audio_signal.get_channel(1),
+        stft1, psd1, frequency_vector, time_vector = spectral_utils.e_stft_plus(self.audio_signal.get_channel(1),
                                                                                       L, hop, winType, fs, use_librosa=True)
-        stft2, psd2, frequency_vector, time_vector = nussl.spectral_utils.e_stft_plus(self.audio_signal.get_channel(2),
+        stft2, psd2, frequency_vector, time_vector = spectral_utils.e_stft_plus(self.audio_signal.get_channel(2),
                                                                                       L, hop, winType, fs, use_librosa=True)
 
         # remove dc component to avoid dividing by zero freq. in the delay estimation
@@ -114,7 +114,7 @@ class Duet(nussl.separation.separation_base.SeparationBase):
 
         # Calculate the symmetric attenuation (alpha) and delay (delta) for each
         # time-freq. point
-        R21 = (stft2 + nussl.constants.EPSILON) / (stft1 + nussl.constants.EPSILON)
+        R21 = (stft2 + constants.EPSILON) / (stft1 + constants.EPSILON)
         atn = np.abs(R21)  # relative attenuation between the two channels
         alpha = atn - 1 / atn  # symmetric attenuation
         delta = -np.imag(np.log(R21)) / (2 * np.pi * wmat)  # relative delay
@@ -186,9 +186,9 @@ class Duet(nussl.separation.separation_base.SeparationBase):
             Xm = np.vstack([np.zeros((1, num_time_bins)),
                             (stft1 + atnpeak[i] * np.exp(1j * wmat * deltapeak[i]) * stft2) / (1 + atnpeak[i] ** 2) * mask])
             # xi = spectral_utils.f_istft(Xm, L, winType, hop, fs)
-            xi = nussl.spectral_utils.e_istft(Xm, L, hop, winType)
+            xi = spectral_utils.e_istft(Xm, L, hop, winType)
 
-            xhat[i, :] = nussl.utils.add_mismatched_arrays(xhat[i,], xi)[:self.audio_signal.signal_length]
+            xhat[i, :] = utils.add_mismatched_arrays(xhat[i,], xi)[:self.audio_signal.signal_length]
             # add back to the separated signal a portion of the mixture to eliminate
             # most of the masking artifacts
             # xhat=xhat+0.05*x[0,:]
@@ -356,7 +356,7 @@ class Duet(nussl.separation.separation_base.SeparationBase):
         """
         signals = []
         for i in range(self.num_sources):
-            cur_signal = nussl.audio_signal.AudioSignal(audio_data_array=self.separated_sources[i],
+            cur_signal = AudioSignal(audio_data_array=self.separated_sources[i],
                                                         sample_rate=self.sample_rate)
             signals.append(cur_signal)
         return signals

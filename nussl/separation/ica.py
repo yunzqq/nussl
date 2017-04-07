@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.decomposition import FastICA
 
 import separation_base
-from nussl.audio_signal import AudioSignal
+from .. import AudioSignal
 
 
 class ICA(separation_base.SeparationBase):

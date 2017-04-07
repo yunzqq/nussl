@@ -28,6 +28,7 @@ def evaluate(evaluation_object, sources, algorithm_name):
         evaluation_object.bss_eval_sources()
         evaluation_object.bss_eval_images()
         end = time.time()
+        print evaluation_object.scores
         print end - start
 
 ideal_mask = nussl.IdealMask(mixture, sources = [mixture - vocals, vocals])
@@ -64,7 +65,7 @@ sources = ft2d.make_audio_signals()
 evaluate(evaluation, sources, 'FT2D')
 
 overlap_add = nussl.OverlapAdd(mixture, separation_method = 'REPET',
-                               hop_size = 5, window_size = 10)
+                               overlap_hop_size = 5, overlap_window_size = 10)
 overlap_add.run()
 sources = overlap_add.make_audio_signals()
 

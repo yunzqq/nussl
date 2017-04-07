@@ -17,7 +17,8 @@ class TFNMF(object):
     def set_input_matrix(self, V):
         self.V = tf.constant(V, dtype=tf.float32)
 
-    def __init__(self, V, rank, update_H = True, update_W = True, H = None, W = None, algo="mu", learning_rate=0.01):
+    def __init__(self, V, rank, update_H = True, update_W = True, H = None, W = None, algo="mu", learning_rate=0.01
+                 , alpha = .9, beta = .9):
         #convert numpy matrix(2D-array) into TF Tensor
         self.set_input_matrix(V)
         shape = V.shape
@@ -27,6 +28,8 @@ class TFNMF(object):
         self.lr = learning_rate
         self.update_H = update_H
         self.update_W = update_W
+        self.alpha = alpha
+        self.beta = beta
 
         #scale uniform random with sqrt(V.mean() / rank)
         scale = 2 * np.sqrt(V.mean() / rank)
@@ -100,7 +103,7 @@ class TFNMF(object):
 
         self.step = tf.group(save_W, update_H, update_W)
 
-    def _build_sparse_mu_algorithm(self, alpha = .9, beta = .9):
+    def _build_sparse_mu_algorithm(self):
         """build dataflow graph for Multiplicative algorithm"""
 
         V, H, W = self.V, self.H, self.W
@@ -117,7 +120,7 @@ class TFNMF(object):
                 #update operation for H
                 Wt = tf.transpose(W)
                 WV = tf.matmul(Wt, V)
-                WV_H = tf.subtract(WV, beta * H)
+                WV_H = tf.subtract(WV, self.beta * H)
 
                 WWH = tf.matmul(tf.matmul(Wt, W), H)
                 WV_WWH = WV_H / WWH
@@ -137,7 +140,7 @@ class TFNMF(object):
                 Ht = tf.transpose(H)
                 VH = tf.matmul(V, Ht)
                 WHH = tf.matmul(W, tf.matmul(H, Ht))
-                VH_W = tf.subtract(VH, beta * W)
+                VH_W = tf.subtract(VH, self.alpha * W)
                 VH_WHH = VH_W / WHH
                 with tf.device('/cpu:0'):
                     VH_WHH = tf.where(tf.is_nan(VH_WHH),

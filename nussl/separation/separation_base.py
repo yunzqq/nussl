@@ -4,10 +4,10 @@
 from .. import constants
 from .. import spectral_utils
 from .. import audio_signal
+from .. import utils
 
 import copy
 import json
-import nussl.utils
 import numpy as np
 import inspect
 
@@ -93,7 +93,7 @@ class SeparationBase(object):
         d = copy.copy(o.__dict__)
         for k, v in d.items():
             if isinstance(v, np.ndarray):
-                d[k] = nussl.utils.json_ready_numpy_array(v)
+                d[k] = utils.json_ready_numpy_array(v)
             if isinstance(v, audio_signal.AudioSignal) or isinstance(v, spectral_utils.StftParams):
                 d[k] = v.to_json()
 
@@ -169,7 +169,7 @@ class SeparationBaseDecoder(json.JSONDecoder):
             # fill out the rest of the fields
             for k, v in json_dict.items():
                 if isinstance(v, dict) and constants.NUMPY_JSON_KEY in v:
-                    separator.__dict__[k] = nussl.utils.json_numpy_obj_hook(v[constants.NUMPY_JSON_KEY])
+                    separator.__dict__[k] = utils.json_numpy_obj_hook(v[constants.NUMPY_JSON_KEY])
                 elif isinstance(v, basestring) and audio_signal.__name__ in v: # TODO: python3-ify this
                     separator.__dict__[k] = audio_signal.AudioSignal.from_json(v)
                 else:

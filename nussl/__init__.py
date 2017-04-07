@@ -1,12 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+
 from .audio_signal import AudioSignal
 from constants import *
 from evaluation import Evaluation
 from separation import *
 from utils import *
 from .spectral_utils import *
+import transformers
 
 __version__ = '0.1.5a10'
 

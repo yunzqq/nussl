@@ -10,7 +10,7 @@ from scipy.ndimage.filters import maximum_filter, minimum_filter
 
 from .. import constants
 import separation_base
-from nussl.audio_signal import AudioSignal
+from .. import AudioSignal
 
 
 class FT2D(separation_base.SeparationBase):

@@ -8,3 +8,4 @@ from projet_lite import ProjetLite
 from repet import Repet
 from repet_sim import RepetSim
 from rpca import RPCA
+from duet import Duet

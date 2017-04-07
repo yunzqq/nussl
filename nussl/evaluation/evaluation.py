@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from nussl.audio_signal import AudioSignal
-from mir_eval import separation
+from .. import AudioSignal
+from .. import constants
+import bss_eval
 import numpy as np
 import json
 
@@ -144,8 +145,8 @@ class Evaluation(object):
         if self.num_channels != 1:
             reference = np.sum(reference, axis=-1)
             estimated = np.sum(estimated, axis=-1)
-        separation.validate(reference, estimated)
-        sdr, sir, sar, perm = separation.bss_eval_sources(reference, estimated,
+        bss_eval.validate(reference, estimated)
+        sdr, sir, sar, perm = bss_eval.bss_eval_sources(reference, estimated,
                                                           compute_permutation = self.compute_permutation)
 
         for i, label in enumerate(self.ground_truth_labels):
@@ -170,8 +171,8 @@ class Evaluation(object):
         if self.num_channels == 1:
             raise Exception("Can't run bss_eval_images on mono audio signals!")
         reference, estimated = self.transform_sources_to_array()
-        separation.validate(reference, estimated)
-        sdr, isr, sir, sar, perm = separation.bss_eval_images(reference, estimated,
+        bss_eval.validate(reference, estimated)
+        sdr, isr, sir, sar, perm = bss_eval.bss_eval_images(reference, estimated,
                                                           compute_permutation=self.compute_permutation)
 
         for i, label in enumerate(self.ground_truth_labels):
@@ -198,8 +199,8 @@ class Evaluation(object):
         if self.num_channels != 1:
             reference = np.sum(reference, axis=-1)
             estimated = np.sum(estimated, axis=-1)
-        separation.validate(reference, estimated)
-        sdr, sir, sar, perm = separation.bss_eval_sources_framewise(reference, estimated,
+        bss_eval.validate(reference, estimated)
+        sdr, sir, sar, perm = bss_eval.bss_eval_sources_framewise(reference, estimated,
                                                         window = self.segment_size, hop = self.hop_size,
                                                         compute_permutation=self.compute_permutation)
 
@@ -214,8 +215,8 @@ class Evaluation(object):
         if self.num_channels == 1:
             raise Exception("Can't run bss_eval_Image frames_framewise on mono audio signals!")
         reference, estimated = self.transform_sources_to_array()
-        separation.validate(reference, estimated)
-        sdr, isr, sir, sar, perm = separation.bss_eval_images_framewise(reference, estimated,
+        bss_eval.validate(reference, estimated)
+        sdr, isr, sir, sar, perm = bss_eval.bss_eval_images_framewise(reference, estimated,
                                                             window=self.segment_size, hop=self.hop_size,
                                                             compute_permutation=self.compute_permutation)
 

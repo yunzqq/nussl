@@ -85,5 +85,5 @@ class ContextDeepAutoEncoder(TransformerMixin):
         #                     self.autoencoder.get_layer('encoder'))
         return self
 
-    def kl_divergence_nmf(y_true, y_pred):
+    def kl_divergence_nmf(self, y_true, y_pred):
         return K.sum(y_true * (K.log(y_true + K.epsilon()) - K.log(y_pred + K.epsilon())) - y_true + y_pred)

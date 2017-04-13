@@ -1,52 +1,60 @@
-from keras.layers import Input, Dense, Reshape, Flatten, Dropout
+from keras.layers import Input, InputLayer, Dense, Conv2D, Conv2DTranspose, Reshape, Flatten, Lambda, Concatenate, Masking
+from keras.layers.merge import Add
 from keras.models import Model, Sequential, load_model
-from keras import optimizers
+from keras import optimizers, objectives
 from sklearn.base import TransformerMixin
 from keras import regularizers
 import numpy as np
+import matplotlib.pyplot as plt
 from keras import backend as K
 import operator
+from deconvolutional import Conv2DTransposeSharedWeights
 
 
-class ContextDeepAutoEncoder(TransformerMixin):
-    def __init__(self, input_shape=(25, 128), dims = (256, 128, 64, 128, 256), output_shape=(25, 128), activation_sparsity=0.01,
-                 template_sparsity=1, num_decoders = 2, loss='mean_squared_error', optimizer='adadelta', dropout = True):
+class ConvolutionalAutoEncoder(TransformerMixin):
+    def __init__(self, input_shape=(25, 513), output_shape=(25, 513), activation_sparsity=0.01,
+                 template_sparsity=1, num_decoders = 1, loss='mask_loss', optimizer='adadelta'):
         if loss == 'mask_loss':
             loss = self.mask_loss
         self.loss = loss
         self.optimizer = optimizer
+        self.alpha = .001
+
+        self.num_timesteps, self.num_features = input_shape
+        num_frequency_filters = 50
+        num_time_filters = 30
+        bottleneck_size = 128
+        kernel_size_vertical = (1, self.num_features)
+        kernel_size_horizontal = (3, 1)
 
         self.input_frame = Input(shape=input_shape)
         encoder = Sequential()
 
         #encoding
-
+        #encoder.add(InputLayer(input_shape=input_shape)(input_frame))
         #noise_layer = GaussianNoise(.1, input_shape=(input_shape,))
         #network.add(noise_layer)
-        even = 1
-        if len(dims) % 2 == 0:
-            even = 0
-
-        encoder.add(Flatten(input_shape=input_shape))
-        # vertical_bias = Dense(50, kernel_initializer='zeros', use_bias=False)
-        for i in range((len(dims) / 2) + even):
-            encoder.add(Dense(dims[i], activation='relu'))
-            if dropout:
-                encoder.add(Dropout(.8))
-
+        vertical_convolution = Conv2D(num_frequency_filters, kernel_size_vertical, strides=(1, 1), padding='valid', activation='linear')
+        #vertical_bias = Dense(50, kernel_initializer='ones', use_bias=True)
+        encoder.add(Reshape((self.num_timesteps, self.num_features, -1), input_shape=input_shape))
+        encoder.add(vertical_convolution)
+        horizontal_convolution = Conv2D(num_time_filters, kernel_size_horizontal, strides=(1, 1), padding='valid', activation='linear')
+        # horizontal_bias = Dense(30, kernel_initializer='zeros')
+        encoder.add(horizontal_convolution)
+        encoder.add(Flatten())
+        encoder.add(Dense(bottleneck_size, activation='relu'))
 
         #decoding
         def create_decoder_for_source(decoder):
-            decoder.add(Dense(dims[len(dims) / 2 + even], activation='relu',
-                input_shape=(dims[len(dims) / 2],)))
-            for i in range((len(dims) / 2) + even, len(dims)):
-                decoder.add(Dense(dims[i], activation='relu'))
-                if dropout:
-                    encoder.add(Dropout(.8))
-            decoder.add(Dense(reduce(operator.mul, list(output_shape)), activation='relu'))
-            if dropout:
-                encoder.add(Dropout(.8))
-            decoder.add(Reshape(output_shape))
+            decoder.add(Dense(reduce(operator.mul, list(horizontal_convolution.output_shape[1:])), activation = 'relu',
+                              input_shape = (bottleneck_size,)))
+            decoder.add(Reshape(list(horizontal_convolution.output_shape[1:])))
+            decoder.add(Conv2DTransposeSharedWeights(num_frequency_filters, kernel_size_horizontal,
+                                        shared_layer=horizontal_convolution, padding='valid', activation='linear', use_bias=False))
+
+            decoder.add(Conv2DTransposeSharedWeights(1, kernel_size_vertical,
+                                        shared_layer=vertical_convolution, padding='valid', activation='linear', use_bias=False))
+            decoder.add(Reshape(input_shape))
             return decoder
 
         #one decoder per output source
@@ -62,12 +70,15 @@ class ContextDeepAutoEncoder(TransformerMixin):
         self.autoencoder.compile(loss=self.loss, optimizer=self.optimizer)
 
     def mask_loss(self, y_true, y_pred):
-        all_sources = K.sum(self.decoders)
-        interfering_source_mask = (all_sources - y_pred) > (all_sources + K.epsilon())
-        mask = y_pred > (all_sources + K.epsilon())
-        diff = K.mean(K.square(interfering_source_mask - mask))
-        y_mask = mask * self.input_frame
-        return K.mean(K.square(y_true - y_mask)) - self.alpha*diff
+        all_sources = K.concatenate(self.decoders, axis=1)
+        all_sources = K.sum(K.reshape(all_sources, (-1, len(self.decoders), self.num_timesteps, self.num_features)), axis=1)
+        interfering_source_mask = ((all_sources - y_pred) + K.epsilon()) / (all_sources + K.epsilon())
+        mask = (y_pred + K.epsilon()) / (all_sources + K.epsilon())
+        target_source = mask * self.input_frame
+        interfering_sources = interfering_source_mask * self.input_frame
+        contrastive_mask_loss = objectives.mean_squared_error(target_source, interfering_sources)
+        target_mask_loss = objectives.mean_squared_error(y_true, target_source)
+        return target_mask_loss - self.alpha*contrastive_mask_loss
 
     def fit(self, input_data, output_data, **kwargs):
         self.autoencoder.fit(input_data, output_data,
@@ -109,10 +120,10 @@ class ContextDeepAutoEncoder(TransformerMixin):
         return reconstruction
 
     def save(self, path):
-        self.autoencoder.save(path)
+        self.autoencoder.save_weights(path)
 
     def load(self, path):
-        self.autoencoder = load_model(path, custom_objects={'mask_loss': self.mask_loss})
+        self.autoencoder.load_weights(path)
         self.has_fit_been_run = True
         return self
 

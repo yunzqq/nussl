@@ -9,8 +9,8 @@ from keras import backend as K
 
 
 class BasicAutoEncoder(TransformerMixin):
-    def __init__(self, encoding_dim=256, input_shape=1025, output_shape=1025, activation_sparsity=0.01,
-                 template_sparsity=1, loss='kl_divergence_nmf', optimizer=optimizers.rmsprop(lr=.001)):
+    def __init__(self, encoding_dim=128, input_shape=1025, output_shape=1025, activation_sparsity=0,
+                 template_sparsity=0, loss='mean_squared_error', optimizer='rmsprop'):
         if loss == 'kl_divergence_nmf':
             loss = self.kl_divergence_nmf
         encoding_dim = encoding_dim
@@ -32,13 +32,9 @@ class BasicAutoEncoder(TransformerMixin):
 
         self.autoencoder.compile(loss=self.loss, optimizer=self.optimizer)
 
-    def fit(self, input_data, output_data, validation_data=None, epochs=50, batch_size=256, shuffle=True, callbacks=None):
+    def fit(self, input_data, output_data, **kwargs):
         self.autoencoder.fit(input_data, output_data,
-                             epochs=epochs,
-                             batch_size=batch_size,
-                             shuffle=shuffle,
-                             validation_data=validation_data,
-                             callbacks=callbacks)
+                             **kwargs)
         self.has_fit_been_run = True
         return self
 

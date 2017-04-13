@@ -29,8 +29,10 @@ if constants.USE_GPU:
     from nmf_tensorflow import NMF
     from basic_autoencoder import BasicAutoEncoder
     from context_deep_autoencoder import ContextDeepAutoEncoder
-    from recurrent_autoencoder import RecurrentAutoEncoder
+    #from recurrent_autoencoder import RecurrentAutoEncoder
     from variational_auto_encoder import VariationalAutoEncoder
+    from convolutional_autoencoder import ConvolutionalAutoEncoder
+    from deep_clustering import DeepClustering
 
 else:
     from sklearn.decomposition import NMF

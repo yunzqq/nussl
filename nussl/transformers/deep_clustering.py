@@ -8,12 +8,12 @@ from keras.regularizers import l2
 
 
 class DeepClustering(TransformerMixin):
-    def __init__(self, input_shape=(25, 128), num_sources = 2, batch_size = 128, optimizer='adadelta'):
+    def __init__(self, input_shape=(-1, 128), num_sources = 2, batch_size = 128, optimizer='adadelta'):
 
         self.loss = self.affinity_k_means
-        self.num_features, self.num_timesteps = input_shape
+        self.num_timesteps, self.num_features = input_shape
         self.num_recurrent_layers = 2
-        self.embedding_dimensions = 40
+        self.embedding_dimensions = 10
         self.size_recurrent_layers = 300
         self.dropout = .5
         self.recurrent_dropout = .2
@@ -22,7 +22,7 @@ class DeepClustering(TransformerMixin):
         self.num_sources = num_sources
         self.batch_size = batch_size
 
-        output_shape = int(self.num_features * self.embedding_dimensions / self.num_sources)
+        output_shape = self.num_features * self.embedding_dimensions
 
         input_sequence = Input(shape=input_shape)
         deep_clusterer = Sequential()

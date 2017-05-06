@@ -154,18 +154,16 @@ class FT2D(separation_base.SeparationBase):
 
         gs = gridspec.GridSpec(6, 10)
         for i in range(self.audio_signal.num_channels):
-            plot_image(fig, gs[0:2, 0:7], librosa.amplitude_to_db(np.abs(self.stft[:, :, i]), ref=np.max), 'Mixture STFT', 'time', 'log')
-            plot_image(fig, gs[0:2, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.ft2d[:, :, i]))), 'Mixture 2DFT')
+            plot_image(fig, gs[0:2, 0:7], librosa.amplitude_to_db(np.abs(self.stft[:, :, i]), ref=np.max), 'Mixture spectrogram', 'time', 'log')
+            plot_image(fig, gs[0:2, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.ft2d[:, :, i]))), 'Mixture 2DFT (scale-rate)')
 
-            plot_image(fig, gs[2:4, 0:7], librosa.amplitude_to_db(self.bg_inversion[i]), 'STFT from inverted background 2DFT', 'time',
-                 'log')
-            plot_image(fig, gs[2:4, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.bg_ft2d[i]))), 'Background 2DFT')
+            #plot_image(fig, gs[2:4, 0:7], librosa.amplitude_to_db(self.bg_inversion[i]), 'STFT from inverted background 2DFT', 'time','log')
+            plot_image(fig, gs[2:4, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.bg_ft2d[i]))), 'Background 2DFT (scale-rate)')
 
-            #plot_image(fig, gs[2, 0:7], librosa.amplitude_to_db(np.abs(self.background.stft()[:, :, i])), 'Background STFT', 'time', 'log')
+            plot_image(fig, gs[2:4, 0:7], librosa.amplitude_to_db(np.abs(self.background.stft()[:, :, i])), 'Background spectrogram', 'time', 'log')
 
-            plot_image(fig, gs[4:, 0:7], librosa.amplitude_to_db(np.abs(self.fg_inversion[i])), 'STFT from inverted foreground 2DFT',
-                 'time', 'log')
-            plot_image(fig, gs[4:, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.fg_ft2d[i]))), 'Foreground 2DFT')
+            #plot_image(fig, gs[4:, 0:7], librosa.amplitude_to_db(np.abs(self.fg_inversion[i])), 'STFT from inverted foreground 2DFT','time', 'log')
+            plot_image(fig, gs[4:, 7:], librosa.amplitude_to_db(np.abs(np.fft.fftshift(self.fg_ft2d[i]))), 'Foreground 2DFT (scale-rate)')
 
-            #plot_image(fig, gs[4, 0:7], librosa.amplitude_to_db(np.abs(self.foreground.stft()[:, :, i])), 'Foreground STFT', 'time', 'log')
+            plot_image(fig, gs[4:, 0:7], librosa.amplitude_to_db(np.abs(self.foreground.stft()[:, :, i])), 'Foreground spectrogram', 'time', 'log')
             break

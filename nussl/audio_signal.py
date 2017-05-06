@@ -63,7 +63,7 @@ class AudioSignal(object):
     """
 
     def __init__(self, path_to_input_file=None, audio_data_array=None, stft=None,
-                 sample_rate=constants.DEFAULT_SAMPLE_RATE, stft_params=None, offset=0, duration=None):
+                 sample_rate=None, stft_params=None, offset=0, duration=None):
 
         self.path_to_input_file = path_to_input_file
         self._audio_data = None
@@ -333,11 +333,18 @@ class AudioSignal(object):
                 warnings.warn('offset + duration are longer than the signal. Reading until end of signal...',
                               UserWarning)
 
-            audio_input, self.sample_rate = librosa.load(input_file_path,
+            audio_input, sample_rate = librosa.load(input_file_path,
                                                          sr=None,
                                                          offset=offset,
                                                          duration=duration,
                                                          mono=False)
+
+            if self.sample_rate != sample_rate and self.sample_rate is not None:
+                warnings.warn('Sample rate of file (%i) not equal to requested sample rate (%i). Resampling...' %
+                              (sample_rate, self.sample_rate))
+                audio_input = librosa.resample(audio_input, sample_rate, self.sample_rate)
+            else:
+                self.sample_rate = sample_rate
 
             # Change from fixed point to floating point
             if not np.issubdtype(audio_input.dtype, float):
@@ -1029,6 +1036,16 @@ class AudioSignal(object):
         if overwrite:
             self.audio_data = mono
         return mono
+
+    def resample(self, sample_rate, overwrite=False):
+        resampled = librosa.resample(self.audio_data, self.sample_rate, sample_rate)
+        if overwrite:
+            self.audio_data = resampled
+            self.sample_rate = sample_rate
+            return self
+        else:
+            resampled = AudioSignal(audio_data_array=resampled, sample_rate=sample_rate)
+            return resampled
 
     ##################################################
     #              Operator overloading

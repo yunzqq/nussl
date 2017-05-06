@@ -556,7 +556,6 @@ def bss_eval_images_framewise(reference_sources, estimated_sources,
         is False
 
     """
-
     # make sure the input has 3 dimensions
     # assuming input is in shape (nsampl) or (nsrc, nsampl)
     estimated_sources = np.atleast_3d(estimated_sources)

@@ -9,13 +9,15 @@ if not path in sys.path:
 import nussl
 
 
-mixture = nussl.AudioSignal('../input/mixture/mixture.wav', duration = 30, offset = 60)
-vocals = nussl.AudioSignal('../input/mixture/vocals.wav', duration = 30, offset = 60)
+mixture = nussl.AudioSignal('../input/mixture/mixture.wav', sample_rate = 8000, duration = 30, offset = 60)
+vocals = nussl.AudioSignal('../input/mixture/vocals.wav', sample_rate = 8000, duration = 30, offset = 60)
 background = mixture - vocals
 
 evaluation = nussl.Evaluation(ground_truth = [background, vocals],
                               compute_permutation = False,
-                              ground_truth_labels = ['Vocals', 'Background'])
+                              ground_truth_labels = ['Vocals', 'Background'],
+                              segment_size = 1,
+                              hop_size = 1)
 #evaluation.load_scores_from_file('output/evaluation.json')
 
 def evaluate(evaluation_object, sources, algorithm_name):
@@ -25,8 +27,8 @@ def evaluate(evaluation_object, sources, algorithm_name):
         evaluation_object.estimated_sources = sources
 
         start = time.time()
-        evaluation_object.bss_eval_sources()
-        evaluation_object.bss_eval_images()
+        #evaluation_object.bss_eval_sources()
+        evaluation_object.bss_eval_images_framewise()
         end = time.time()
         print evaluation_object.scores
         print end - start

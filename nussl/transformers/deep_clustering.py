@@ -1,26 +1,31 @@
-from keras.layers import Input, LSTM, Bidirectional, TimeDistributed, Dense
+from keras.layers import Input, LSTM, Bidirectional, TimeDistributed, Dense, GaussianNoise
 from keras.models import Sequential, load_model, Model
 from keras.optimizers import Nadam
 from sklearn.base import TransformerMixin
 import numpy as np
 from keras import backend as K
 from keras.regularizers import l2
+from keras.constraints import unit_norm
 
 
 class DeepClustering(TransformerMixin):
-    def __init__(self, input_shape=(-1, 128), num_sources = 2, batch_size = 128, optimizer='adadelta'):
-
+    def __init__(self, input_shape=(25, 128), num_sources = 2, batch_size = 128, optimizer='nadam'):
         self.loss = self.affinity_k_means
         self.num_timesteps, self.num_features = input_shape
-        self.num_recurrent_layers = 2
-        self.embedding_dimensions = 10
-        self.size_recurrent_layers = 300
+        self.num_recurrent_layers = 4
+        self.embedding_dimensions = 20
+        self.size_recurrent_layers = 500
         self.dropout = .5
         self.recurrent_dropout = .2
         self.l2_regularization = 1e-6
         self.clipnorm = 200
         self.num_sources = num_sources
         self.batch_size = batch_size
+
+        if optimizer == 'nadam':
+            self.optimizer = Nadam(clipnorm=self.clipnorm)
+        else:
+            self.optimizer = optimizer
 
         output_shape = self.num_features * self.embedding_dimensions
 
@@ -39,23 +44,26 @@ class DeepClustering(TransformerMixin):
             else:
                 layer = Bidirectional(lstm_layer)
             deep_clusterer.add(layer)
+            #deep_clusterer.add(GaussianNoise(.6))
+
 
         embedding_layer = TimeDistributed(Dense(output_shape,
                                                 activation='tanh',
                                                 kernel_regularizer=l2(self.l2_regularization),
                                                 bias_regularizer=l2(self.l2_regularization)),
-                                          name = 'embedding')
+                                                name = 'embedding')
         deep_clusterer.add(embedding_layer)
         print deep_clusterer.summary()
         deep_clusterer = deep_clusterer(input_sequence)
 
         self.deep_clusterer = Model(inputs=[input_sequence], outputs=[deep_clusterer])
-        self.deep_clusterer.compile(loss = self.affinity_k_means, optimizer = Nadam(clipnorm=self.clipnorm))
+        self.deep_clusterer.compile(loss = self.affinity_k_means, optimizer = self.optimizer)
 
     def affinity_k_means(self, Y, V):
         def norm(tensor):
             square_tensor = K.square(tensor)
             frobenius_norm = K.sum(square_tensor, axis=(1, 2))
+            frobenius_norm = K.sqrt(frobenius_norm)
             return frobenius_norm
 
         def dot(x, y):
@@ -84,12 +92,12 @@ class DeepClustering(TransformerMixin):
         return self
 
     def transform(self, X):
-        raise NotImplementedError("Haven't fgured out this function yet!")
-
-        # if not self.has_fit_been_run:
-        #     raise ValueError("Model has not been fit! Run fit() before calling this.")
-        # self.representation = self.encoder.predict(X)
-        # return self.representation
+        if not self.has_fit_been_run:
+            raise ValueError("Model has not been fit! Run fit() before calling this.")
+        if len(X.shape) < 3:
+            X = np.expand_dims(X, axis = 0)
+        self.representation = self.deep_clusterer.predict(X)
+        return self.representation
 
     def reconstruction_error(self, X):
         if not self.has_fit_been_run:

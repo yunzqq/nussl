@@ -65,8 +65,8 @@ class Evaluation(object):
         
         self.compute_permutation = compute_permutation
 
-        self.segment_size = segment_size
-        self.hop_size = hop_size
+        self.segment_size = segment_size*self.sample_rate
+        self.hop_size = hop_size*self.sample_rate
         self.scores = {}
 
     @staticmethod
@@ -210,7 +210,6 @@ class Evaluation(object):
         Returns:
 
         """
-        raise NotImplementedError("Still working on this!")
         self.validate()
         if self.num_channels == 1:
             raise Exception("Can't run bss_eval_Image frames_framewise on mono audio signals!")
@@ -218,7 +217,18 @@ class Evaluation(object):
         bss_eval.validate(reference, estimated)
         sdr, isr, sir, sar, perm = bss_eval.bss_eval_images_framewise(reference, estimated,
                                                             window=self.segment_size, hop=self.hop_size,
-                                                            compute_permutation=self.compute_permutation)
+                                                            compute_permutation=False)
+        
+        for i, label in enumerate(self.ground_truth_labels):
+            self.scores[self.algorithm_name][label]['Images'] = {}
+
+            D = self.scores[self.algorithm_name][label]['Images']
+
+            D['Source to Distortion Framewise'] = sdr.tolist()[i]
+            D['Image to Spatial Framewise'] = isr.tolist()[i]
+            D['Source to Interference Framewise'] = sir.tolist()[i]
+            D['Source to Artifact Framewise'] = sar.tolist()[i]
+            
 
     def load_scores_from_file(self, filename):
         f = open(filename, 'r')

@@ -9,3 +9,4 @@ from repet import Repet
 from repet_sim import RepetSim
 from rpca import RPCA
 from duet import Duet
+from algorithm_switcher import AlgorithmSwitcher

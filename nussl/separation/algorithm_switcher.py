@@ -47,20 +47,20 @@ class AlgorithmSwitcher(separation_base.SeparationBase):
 
         """
         resample_hz = 8000
-        mixture_audio_data = self.mixture.resample(resample_hz).audio_data.reshape(-1, 2)
-        mixture_audio_data = np.mean(mixture_audio_data, axis=-1)
+        mixture_audio_data = self.mixture.resample(resample_hz).audio_data
+        mixture_audio_data = np.mean(mixture_audio_data, axis=0)
         estimate_audio_data = []
         for vocal_estimate in self.vocal_estimates:
-            estimate_audio_data.append(np.mean(vocal_estimate.resample(resample_hz).audio_data.reshape(-1, 2), axis = -1))
-        estimate_audio_data = np.vstack(estimate_audio_data)
+            estimate_audio_data.append(np.mean(vocal_estimate.resample(resample_hz).audio_data, axis=0))
+        estimate_audio_data = np.vstack(estimate_audio_data).T
 
-        mixture_audio_data = mixture_audio_data.reshape(8000, -1)
-        estimate_audio_data = estimate_audio_data.reshape(8000, -1, len(self.vocal_estimates))
-        self.sdrs = np.empty((mixture_audio_data.shape[-1], estimate_audio_data.shape[-1]))
+        mixture_audio_data = mixture_audio_data.reshape(-1, 8000)
+        estimate_audio_data = estimate_audio_data.reshape(-1, 8000, len(self.vocal_estimates))
+        self.sdrs = np.empty((mixture_audio_data.shape[0], estimate_audio_data.shape[-1]))
 
-        for sec in range(mixture_audio_data.shape[-1]):
+        for sec in range(mixture_audio_data.shape[0]):
             for est in range(estimate_audio_data.shape[-1]):
-                input_data = np.vstack([mixture_audio_data[:, sec], estimate_audio_data[:, sec, est]])
+                input_data = np.vstack([mixture_audio_data[sec, :], estimate_audio_data[sec, :, est]])
                 input_data = input_data.reshape((1,) + input_data.shape)
 
                 sdr = self.model.predict(input_data)
@@ -71,7 +71,7 @@ class AlgorithmSwitcher(separation_base.SeparationBase):
         sample_rate = self.mixture.sample_rate
         best = np.argmax(self.sdrs, axis=1)
 
-        for sec in range(mixture_audio_data.shape[-1]):
+        for sec in range(mixture_audio_data.shape[0]):
             foreground_audio_data[:, sec*sample_rate:(sec+1)*sample_rate] = \
                 estimate_audio_data[best[sec]][:, sec*sample_rate:(sec+1)*sample_rate]
 

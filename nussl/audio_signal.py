@@ -1039,17 +1039,37 @@ class AudioSignal(object):
         return mono
 
     def resample(self, sample_rate, overwrite=False):
+        """ Resamples ``self.audio_data`` to sample_rate.
+
+        Warning:
+            If overwrite=True (default) this will overwrite any data in ``self.audio_data``!
+
+        Args:
+            sample_rate (int, required): Sample rate to resample audio to
+            overwrite (bool, optional): If ``True`` this function will overwrite ``self.audio_data``.
+
+        Returns:
+            (:obj:`np.array`): Resampled version of ``self.audio_data``.
+
+        """
         resampled = librosa.resample(self.audio_data, self.sample_rate, sample_rate)
 
         if overwrite:
             self.audio_data = resampled
             self.sample_rate = sample_rate
             return self
-        else:
-            resampled = AudioSignal(audio_data_array=resampled, sample_rate=sample_rate)
-            return resampled
+        return resampled
 
     def convolve(self, impulse_response):
+        """ Convolves ``self.audio_data`` with a given impulse_response (an AudioSignal object).
+
+                Args:
+                    impulse_response (:obj:`AudioSignal`): Impulse response to convolve AudioSignal object with.
+
+                Returns:
+                    (:obj:`AudioSignal`) Convolved version of audio, with same length as original audio.
+
+                """
         convolved_signal = []
 
         for i in range(self.num_channels):

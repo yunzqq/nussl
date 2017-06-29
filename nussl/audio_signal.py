@@ -11,6 +11,7 @@ import audioread
 import json
 import warnings
 import copy
+from scipy.signal import fftconvolve
 
 import spectral_utils
 import constants
@@ -663,7 +664,7 @@ class AudioSignal(object):
         if not self.active_region_is_default:
             raise Exception('Cannot truncate while active region is not set as default!')
 
-        n_samples = n_seconds * self.sample_rate
+        n_samples = int(n_seconds * self.sample_rate)
         self.truncate_samples(n_samples)
     
     def crop_signal(self, before, after):
@@ -1039,6 +1040,7 @@ class AudioSignal(object):
 
     def resample(self, sample_rate, overwrite=False):
         resampled = librosa.resample(self.audio_data, self.sample_rate, sample_rate)
+
         if overwrite:
             self.audio_data = resampled
             self.sample_rate = sample_rate
@@ -1046,6 +1048,22 @@ class AudioSignal(object):
         else:
             resampled = AudioSignal(audio_data_array=resampled, sample_rate=sample_rate)
             return resampled
+
+    def convolve(self, impulse_response):
+        convolved_signal = []
+
+        for i in range(self.num_channels):
+            convolved_signal.append(fftconvolve(self.get_channel(i),
+                                                impulse_response.get_channel(i),
+                                                mode='full'))
+
+        convolved_signal = AudioSignal(audio_data_array=np.array(convolved_signal), sample_rate=self.sample_rate)
+        convolved_signal.truncate_seconds(self.signal_duration)
+
+        return convolved_signal
+
+
+
 
     ##################################################
     #              Operator overloading

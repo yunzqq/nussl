@@ -1,5 +1,3 @@
-.. _constants:
-
 constants.py
 ============
 

@@ -1,12 +1,15 @@
 import tensorflow as tf
+import numpy as np
 from sklearn.cluster import KMeans
-from nussl import AudioSignal
 import os
+import librosa
+
+import pickle
 
 
-from tensorflow.contrib.keras.python.keras.models import Sequential
-from tensorflow.contrib.keras.python.keras.layers import Dense, LSTM, Bidirectional, Dropout, Embedding
-from tensorflow.contrib.keras.python.keras.optimizers import SGD
+from keras.models import Sequential
+from keras.layers import Dense, LSTM, Bidirectional, Dropout, GaussianNoise, Flatten
+from keras.optimizers import SGD, Adam
 
 
 # questions for Fatemeh:
@@ -40,33 +43,179 @@ class DeepClustering():
         self.output_dropout_rate = 0
         self.embedding_size = 40
 
+        # Audio Parameters
+        self.sample_rate = 8000
+        self.window_size = 256
+        self.hop_length = 64
+
 
         self.audio_clips = []
 
 
+
     def load_data(self, dir_path):
-        '''
-        Loads raw audio clips into individual AudioSignal objects
-        '''
+        print("loading data...")
+
         for root, directories, filenames in os.walk(dir_path):
             for filename in filenames: 
-                if filename.lower().endswith('wav'):
+                if filename.lower() == ('vocals.wav'):
                     # try to load file into an AudioSignal obj, and add it to audio_clips if successful
                     try:
-                        signal = nussl.AudioSignal(os.path.join(root,filename))
+                        print("--loading file...")
+                        signal, sr = librosa.load(os.path.join(root,filename), mono=True, sr=44100)
+                        # signal = nussl.AudioSignal(os.path.join(root,filename))
                     except:
                         print(filename + " could not be loaded. This file may be in an improper format, or corrupted.")
                         continue
 
-                    self.audio_clips.append(signal) 
+                    # resample audio to 8k and add an AudioSignal obj to our list
+                    # change this to nussl
+                    signal = librosa.resample(signal, 44100, 8000)
+                    # signal = nussl.AudioSignal(audio_data_array=raw_audio)
+                    # signal.resample(8000)
+                    self.audio_clips.append(signal)
+                    print("--file loaded.")
+
+        print("done loading data.")
+
+
+    def prepare_data(self):
+        '''
+        This will eventually prepare all the data, right now it just prepares training examples with a two-file mixture
+        '''
+        # stft_parameters = nussl.StftParams(sample_rate=self.sample_rate, window_length=self.window_size, hop_length=self.hop_length, n_fft_bins=self.num_input)
+
+        print("preparing data...")
+
+        chunks = []
+
+        for signal in self.audio_clips:
+            # get stft data
+
+            # signal.stft_params = stft_parameters
+            # signal.stft()
+            # stft = signal.stft_data
+            # print stft
+            # get raw audio, reshape to 1D
+            raw_audio = signal
+            # raw_audio = np.reshape(raw_audio, raw_audio.shape[1])
+            # raw_audio = signal.get_channel(0)
+
+
+            # get log-magnitude stft and pad for chunking
+            print("--calculating the STFT...")
+
+            stft = librosa.stft(raw_audio, n_fft=self.window_size, hop_length=self.hop_length)
+            stft = librosa.amplitude_to_db(stft)
+            pad_length = self.frame_size - (stft.shape[1] % self.frame_size)
+            stft = np.lib.pad(stft, ((0, 0), (0, pad_length)), 'constant')
+
+            # reshape chop into chunks of size frame_size
+            stft = np.reshape(np.transpose(stft), (-1, self.frame_size, self.num_input))
+            chunks.append(stft)
+
+        # add frames together (TODO: generalize this for more than 2 examples)
+
+        length = min([a.shape[0] for a in chunks])
+
+        # fill an array y_true[num_examples, frame_size*num_input, num_speakers] with true mask data (Fatemeh: use embd_size instead of num_speakers for padding)
+        # fill an array x[num_examples, frame_size, num_input] with training data
+
+        print("--calculating mask and creating mixture...")
+
+        y_true = np.zeros((length, self.frame_size*self.num_input, self.embedding_size))
+        x = np.zeros((length, self.frame_size, self.num_input), dtype=np.complex64)
+
+        for i in range(0, length):
+            for j in range(0, self.frame_size):
+                for k in range(0, self.num_input):
+
+                    bin0 = chunks[0][i, j, k]
+                    bin1 = chunks[1][i, j, k]
+
+                    # create mixture in x
+                    x[i, j, k] = bin0 + bin1
+
+                    #compare magnitudes of each bin for mask values in y_true
+                    # ask Fatemeh about using power spectrogram or other representations to compare bins
+                    if np.abs(bin1) > np.abs(bin0):
+                        if np.abs(bin1) > -40.0:
+                            y_true[i, j*self.num_input + k, 1] = 1
+                    else:
+                        if np.abs(bin0) > -40.0:
+                            y_true[i, j*self.num_input + k, 0] = 1
+
+
+
+        # store in obj, scaled for proper batch size (TODO: how do I not have to do this?)
+        self.y_true = y_true[0:y_true.shape[0]-(y_true.shape[0]%self.batch_size), :, :]
+        self.x = x[0:x.shape[0]-(x.shape[0]%self.batch_size), :, :]
+
+        print("--input: ")
+        print(self.x)
+        print("--input_shape: ")
+        print(self.x.shape)
+
+        # # testing to make sure mixture is going into NN properly
+        # stft = np.reshape(self.x, (-1, self.num_input))
+        # stft = np.transpose(stft)
+        # x_out = librosa.istft(stft, hop_length=self.hop_length)
+        # librosa.output.write_wav("mixture.wav", x_out, 8000)
+
+
+        print("done preparing data.")
+
+        dump_obj = False
+
+        if dump_obj:
+            print("dumping object to file...")
+            pickle.dump(self, open("dc_obj", 'wb'))
+            print("object dumped to file.")
+
+
+    def loss_function_test(self):
+        sess = tf.InteractiveSession()
+
+        # grab one batch from the true labels
+        y_true = self.y_true[0:32]
+
+        # add random gaussian noise 
+        y_pred = y_true + np.random.ranf(y_true.shape)/10
+
+        # compute the dc loss
+        loss = self.deep_clustering(y_true, y_pred)
+        print("Loss for y_true = y_pred:")
+        print(loss.eval(session=sess))
+
+
 
 
 
     def train_model(self):
-    # window 256, hop 64
+        print("training model... start praying...")
+        self.model.fit(self.x, self.y_true, batch_size=32, epochs=100, verbose=1)
 
+        print("saving trained model weights...")
+        self.model.save_weights("deep_clustering_weights.h5")
+
+        print("model saved.")
 
         return None
+
+
+    def predict_from_input(self):
+        print("loading weights...")
+        self.model.load_weights("deep_clustering_weights.h5")
+
+        print("evaluating input...")
+        prediction = self.model.predict(self.x)
+
+        print("prediction: ")
+        print(prediction)
+
+        print("prediction mean: {}".format(np.mean(prediction)))
+
+
 
     def create_model(self): 
 
@@ -76,9 +225,6 @@ class DeepClustering():
         # 1st BLSTM layer with Input and Recurrent Dropout
         # NOTE: will need to call model.reset_states() somehow after each sample
         self.model.add(Bidirectional(LSTM(self.num_hidden/2, activation='tanh',
-            unit_forget_bias=True,
-            dropout=self.input_dropout_rate,
-            recurrent_dropout=self.recurrent_dropout_rate,
             return_sequences=True,
             stateful=False,
             implementation=1),
@@ -86,23 +232,22 @@ class DeepClustering():
             input_shape=(self.frame_size, self.num_input)))
 
         # output dropout
-        self.model.add(Dropout(self.output_dropout_rate))
+        # self.model.add(Dropout(self.output_dropout_rate))
 
         # 2nd BLSTM layer with Input and Recurrent Dropout
         self.model.add(Bidirectional(LSTM(self.num_hidden/2, activation='tanh',
-            unit_forget_bias=True,
-            dropout=self.input_dropout_rate,
-            recurrent_dropout=self.recurrent_dropout_rate,
             return_sequences=True,
             stateful=False,
             implementation=1),
             batch_size=self.batch_size))
 
         # output dropout
-        self.model.add(Dropout(self.output_dropout_rate))
+        # self.model.add(Dropout(self.output_dropout_rate))
+        # self.model.add(GaussianNoise(0.774))
+        # self.model.add(Flatten())
 
         # feedforward layer
-        self.model.add(Dense(self.embedding_size*self.num_input, activation='softmax'))
+        self.model.add(Dense(self.embedding_size*self.num_input, activation='relu'))
 
         # We want shape to be: (129, 40) for each timestep
         # Current output shape: (batch_size, num_frames, num_bins*k)
@@ -111,7 +256,7 @@ class DeepClustering():
 
         # stochastic gradient descent with momentum
         # MAYBE TRY ADAM with the default values
-        self.optimizer = SGD(lr=self.learning_rate, momentum=self.momentum)
+        self.optimizer = Adam(lr=self.learning_rate)
 
         self.model.compile(optimizer=self.optimizer, loss=self.deep_clustering)
 
@@ -124,32 +269,34 @@ class DeepClustering():
             print("shape: " + str(layer.input_shape) + " --> " + str(layer.output_shape) + '\n')
 
 
-    def separate(self, audio_path, num_sources):
+    # def separate(self, audio_path, num_sources):
 
-        try:
-            mixture = AudioSignal(audio_path)
-        except:
-            print("invalid file.")
-            return None
+    #     try:
+    #         mixture = AudioSignal(audio_path)
+    #     except:
+    #         print("invalid file.")
+    #         return None
 
-        # convert mixture to 8000hz Mono
-        mixture.to_mono(overwrite=True)
-        # TODO: Convert to 8000Hz
+    #     # convert mixture to 8000hz Mono
+    #     mixture.to_mono(overwrite=True)
+    #     # TODO: Convert to 8000Hz
 
-        # get the STFT for input into the model
-        mixture_stft = mixture.stft_data(n_frequency_bins=self.num_input)
+    #     # get the STFT for input into the model
+    #     mixture_stft = mixture.stft_data(n_frequency_bins=self.num_input)
 
-        # generate embeddings and flatten for kmeans
-        encoded_mixture = self.model.predict(mixture_stft, batch_size=32)
-        flattened_encodings = np.reshape(encoded_mixture, (-1, self.embedding_size))
+    #     # generate embeddings and flatten for kmeans
+    #     encoded_mixture = self.model.predict(mixture_stft, batch_size=32)
+    #     flattened_encodings = np.reshape(encoded_mixture, (-1, self.embedding_size))
 
-        # perform kmeans to obtain class mask
-        kmeans = KMeans(n_clusters=num_sources, random_state=0)
-        classes = kmeans.fit_predict(flattened_encodings)
-        int_mask = np.reshape(classes, mixture_stft.shape)
+    #     # perform kmeans to obtain class mask
+    #     kmeans = KMeans(n_clusters=num_sources, random_state=0)
+    #     classes = kmeans.fit_predict(flattened_encodings)
+    #     int_mask = np.reshape(classes, mixture_stft.shape)
 
-        # TODO: Use Mask and SeparationBAse class stuff
-        # TODO: Figure out what to return: Raw audio? Masks?
+    #     # TODO: Use Mask and SeparationBase class stuff
+    #     # TODO: Figure out what to return: Raw audio? Masks?
+
+    #     # 
 
 
 
@@ -158,7 +305,6 @@ class DeepClustering():
 
     # Deep clustering loss function
 
-    @classmethod
     def deep_clustering(dc_obj, y_true, y_pred):
         """
         This function implements the deep clustering loss function.
@@ -194,15 +340,14 @@ class DeepClustering():
             # form the estimated mask tensor
             est_mask = tf.cast(tf.reshape(y_pred,(-1,embd_dim)),tf.float32)
 
-
-            # print "Y_Pred Shape: {}".format(y_pred.get_shape())
-            # print "Est_Mask Shape: {}".format(est_mask.get_shape())
+            # print("Y_Pred Shape: {}".format(y_pred.get_shape()))
+            # print("Est_Mask Shape: {}".format(est_mask.get_shape()))
 
             # weighted true and estimated masks
             true_mask_w = tf.multiply(true_mask,class_weight_tile)
             est_mask_w = tf.multiply(est_mask,class_weight_tile)
 
-            # computation of correlation terms
+            # computation of correlation terms (ask: why do we compute correlation? Is this in place of Frobenius norm?)
             true_mask_autocrr = tf.cast(tf.matmul(true_mask_w,true_mask,transpose_a=True),tf.float32)
             est_mask_autocrr = tf.cast(tf.matmul(est_mask_w,est_mask,transpose_a=True),tf.float32)
             true_est_crosscrr = tf.cast(tf.matmul(est_mask_w,true_mask,transpose_a=True),tf.float32)
@@ -223,7 +368,15 @@ class DeepClustering():
 
 
 dc_obj = DeepClustering()
-sc_obj.load_data('./DSD100')
+dc_obj.load_data('DSD_examples')
+dc_obj.prepare_data()
+
+# dc_obj = pickle.load(open('dc_obj', 'rb'))
+# dc_obj.loss_function_test()
 dc_obj.create_model()
 dc_obj.print_model()
+dc_obj.train_model()
+dc_obj.predict_from_input()
+
+
 

@@ -453,15 +453,15 @@ class DeepClustering():
 
 
 
-# dc_obj = DeepClustering()
-# dc_obj.load_data('DSD_examples')
-# dc_obj.prepare_data()
+dc_obj = DeepClustering()
+dc_obj.load_data('DSD_examples')
+dc_obj.prepare_data()
 
-dc_obj = pickle.load(open('dc_obj', 'rb'))
+# dc_obj = pickle.load(open('dc_obj', 'rb'))
 # dc_obj.loss_function_test()
 dc_obj.create_model()
-# dc_obj.print_model()
-# dc_obj.train_model()
+dc_obj.print_model()
+dc_obj.train_model()
 dc_obj.separate("mixture.wav", 2)
 
 

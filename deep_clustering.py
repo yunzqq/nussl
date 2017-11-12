@@ -2,14 +2,17 @@ import tensorflow as tf
 import numpy as np
 from sklearn.cluster import KMeans
 import os
+import copy
 import librosa
+# import lws
 
 import pickle
 
 
 from keras.models import Sequential
-from keras.layers import Dense, LSTM, Bidirectional, Dropout, GaussianNoise, Flatten
+from keras.layers import Dense, Reshape, LSTM, Bidirectional, Dropout, GaussianNoise, Flatten
 from keras.optimizers import SGD, Adam
+from keras.callbacks import Callback, ModelCheckpoint
 
 
 # questions for Fatemeh:
@@ -27,7 +30,7 @@ class DeepClustering():
 
     def __init__(self):
         # Training Parameters
-        self.learning_rate = 0.00001
+        self.learning_rate = 0.0001
         self.momentum = 0.9
         self.training_steps = 10000
         self.batch_size = 32
@@ -39,8 +42,8 @@ class DeepClustering():
         self.timesteps = 100 # timesteps
         self.num_hidden = 600 # hidden layer num of LSTM cells per layer
         self.input_dropout_rate = 0
-        self.recurrent_dropout_rate = 0
-        self.output_dropout_rate = 0
+        self.recurrent_dropout_rate = 0.25
+        self.output_dropout_rate = 0.25
         self.embedding_size = 40
 
         # Audio Parameters
@@ -50,6 +53,7 @@ class DeepClustering():
 
 
         self.audio_clips = []
+
 
 
 
@@ -115,16 +119,18 @@ class DeepClustering():
             chunks.append(stft)
 
         # add frames together (TODO: generalize this for more than 2 examples)
-
         length = min([a.shape[0] for a in chunks])
 
         # fill an array y_true[num_examples, frame_size*num_input, num_speakers] with true mask data (Fatemeh: use embd_size instead of num_speakers for padding)
         # fill an array x[num_examples, frame_size, num_input] with training data
-
         print("--calculating mask and creating mixture...")
 
         y_true = np.zeros((length, self.frame_size*self.num_input, self.embedding_size))
         x = np.zeros((length, self.frame_size, self.num_input), dtype=np.complex64)
+
+        # store true labels for some reason maybe we need it later
+        y_labels = np.zeros((length*self.frame_size*self.num_input))
+        label_counter = 0
 
         for i in range(0, length):
             for j in range(0, self.frame_size):
@@ -139,17 +145,31 @@ class DeepClustering():
                     #compare magnitudes of each bin for mask values in y_true
                     # ask Fatemeh about using power spectrogram or other representations to compare bins
                     if np.abs(bin1) > np.abs(bin0):
-                        if np.abs(bin1) > -40.0:
+                        if np.abs(bin1) > -50.0:
                             y_true[i, j*self.num_input + k, 1] = 1
+                            y_labels[label_counter] = 1
+                        else: 
+                            y_true[i, j*self.num_input + k, 2] = 1
+                            y_labels[label_counter] = 2
+
                     else:
-                        if np.abs(bin0) > -40.0:
+                        if np.abs(bin0) > -50.0:
                             y_true[i, j*self.num_input + k, 0] = 1
+                            y_labels[label_counter] = 0
+
+                        else: 
+                            y_true[i, j*self.num_input + k, 2] = 1
+                            y_labels[label_counter] = 2
+
+                    label_counter += 1
+
 
 
 
         # store in obj, scaled for proper batch size (TODO: how do I not have to do this?)
         self.y_true = y_true[0:y_true.shape[0]-(y_true.shape[0]%self.batch_size), :, :]
         self.x = x[0:x.shape[0]-(x.shape[0]%self.batch_size), :, :]
+        self.y_labels = y_labels[0:self.x.shape[0]*self.x.shape[1]*self.x.shape[2]]
 
         print("--input: ")
         print(self.x)
@@ -165,12 +185,13 @@ class DeepClustering():
 
         print("done preparing data.")
 
-        dump_obj = False
+        dump_obj = True
 
         if dump_obj:
             print("dumping object to file...")
             pickle.dump(self, open("dc_obj", 'wb'))
             print("object dumped to file.")
+
 
 
     def loss_function_test(self):
@@ -188,12 +209,26 @@ class DeepClustering():
         print(loss.eval(session=sess))
 
 
-
-
-
     def train_model(self):
+
+        class WeightNoiseCallback(Callback):
+
+            def on_batch_begin(self, batch, logs={}):
+                for i in range(0, 6):
+                    layer = self.model.get_layer(index=i)
+                    weights = layer.get_weights()
+                    for weight_array in weights:
+                        weight_array += np.random.normal(loc=0.0, scale=0.1, size=weight_array.shape)
+                    
+                    layer.set_weights(weights)
+
+        # initialize callbacks
+        weight_noise = WeightNoiseCallback() # not working right now, Fatemeh said she didn't even use weight noise
+        model_checkpoint = ModelCheckpoint('weights/weights.{epoch:02d}-{loss:.2f}.hdf5', monitor='val_loss', save_weights_only=True, mode='auto', period=100)
+
         print("training model... start praying...")
-        self.model.fit(self.x, self.y_true, batch_size=32, epochs=100, verbose=1)
+
+        self.model.fit(self.x, self.y_true, batch_size=32, epochs=2000, verbose=1, callbacks=[model_checkpoint])
 
         print("saving trained model weights...")
         self.model.save_weights("deep_clustering_weights.h5")
@@ -201,6 +236,7 @@ class DeepClustering():
         print("model saved.")
 
         return None
+
 
 
     def predict_from_input(self):
@@ -227,27 +263,27 @@ class DeepClustering():
         self.model.add(Bidirectional(LSTM(self.num_hidden/2, activation='tanh',
             return_sequences=True,
             stateful=False,
-            implementation=1),
+            implementation=1,
+            recurrent_dropout=self.recurrent_dropout_rate),
             batch_size=self.batch_size,
             input_shape=(self.frame_size, self.num_input)))
 
         # output dropout
-        # self.model.add(Dropout(self.output_dropout_rate))
+        self.model.add(Dropout(self.output_dropout_rate))
 
         # 2nd BLSTM layer with Input and Recurrent Dropout
         self.model.add(Bidirectional(LSTM(self.num_hidden/2, activation='tanh',
             return_sequences=True,
             stateful=False,
-            implementation=1),
+            implementation=1, 
+            recurrent_dropout=self.recurrent_dropout_rate),
             batch_size=self.batch_size))
 
         # output dropout
-        # self.model.add(Dropout(self.output_dropout_rate))
-        # self.model.add(GaussianNoise(0.774))
-        # self.model.add(Flatten())
+        self.model.add(Dropout(self.output_dropout_rate))
 
         # feedforward layer
-        self.model.add(Dense(self.embedding_size*self.num_input, activation='relu'))
+        self.model.add(Dense(self.embedding_size*self.num_input, activation='sigmoid'))
 
         # We want shape to be: (129, 40) for each timestep
         # Current output shape: (batch_size, num_frames, num_bins*k)
@@ -257,6 +293,7 @@ class DeepClustering():
         # stochastic gradient descent with momentum
         # MAYBE TRY ADAM with the default values
         self.optimizer = Adam(lr=self.learning_rate)
+        # self.optimizer = SGD(lr=self.learning_rate, momentum=self.momentum)
 
         self.model.compile(optimizer=self.optimizer, loss=self.deep_clustering)
 
@@ -269,37 +306,84 @@ class DeepClustering():
             print("shape: " + str(layer.input_shape) + " --> " + str(layer.output_shape) + '\n')
 
 
-    # def separate(self, audio_path, num_sources):
+    def separate(self, audio_path, num_sources):
 
-    #     try:
-    #         mixture = AudioSignal(audio_path)
-    #     except:
-    #         print("invalid file.")
-    #         return None
+        print("separating audio...")
 
-    #     # convert mixture to 8000hz Mono
-    #     mixture.to_mono(overwrite=True)
-    #     # TODO: Convert to 8000Hz
+        try:
+            # mixture = AudioSignal(audio_path)
+            mixture, sr = librosa.load(audio_path, mono=True, sr=44100)
+            mixture = librosa.resample(mixture, 44100, 8000)
+        except Exception as e:
+            print("invalid file. " + str(e))
+            return None
 
-    #     # get the STFT for input into the model
-    #     mixture_stft = mixture.stft_data(n_frequency_bins=self.num_input)
+        # convert mixture to 8000hz Mono
+        # mixture.to_mono(overwrite=True)
+        # TODO: Convert to 8000Hz
 
-    #     # generate embeddings and flatten for kmeans
-    #     encoded_mixture = self.model.predict(mixture_stft, batch_size=32)
-    #     flattened_encodings = np.reshape(encoded_mixture, (-1, self.embedding_size))
+        # get the STFT for input into the model
+        print("--calculating STFT of mixture...")
+        mixture_stft = librosa.stft(mixture, n_fft=self.window_size, hop_length=self.hop_length)
+        mixture_input = np.reshape(np.transpose(mixture_stft), (-1, self.frame_size, self.num_input))
 
-    #     # perform kmeans to obtain class mask
-    #     kmeans = KMeans(n_clusters=num_sources, random_state=0)
-    #     classes = kmeans.fit_predict(flattened_encodings)
-    #     int_mask = np.reshape(classes, mixture_stft.shape)
+        # generate embeddings and flatten for kmeans
+        print("--predicting...")
+        self.model.load_weights("deep_clustering_weights_2.h5")
+        encoded_mixture = self.model.predict(mixture_input, batch_size=32)
+        flattened_encodings = np.reshape(encoded_mixture, (-1, self.embedding_size))
 
-    #     # TODO: Use Mask and SeparationBase class stuff
-    #     # TODO: Figure out what to return: Raw audio? Masks?
+        print("--clustering...")
+        # perform kmeans to obtain class mask
+        kmeans = KMeans(n_clusters=num_sources+1, random_state=0, n_jobs=-1)
+        classes = kmeans.fit_predict(flattened_encodings)
+        int_mask = np.reshape(classes, (-1, self.num_input))
+        int_mask = np.transpose(int_mask)
 
-    #     # 
+        print int_mask
+        print int_mask.shape
+        print np.mean(int_mask)
+
+        speaker_stfts = [copy.deepcopy(mixture_stft) for i in range(num_sources+1)]
+        ground_truth_stfts = [copy.deepcopy(mixture_stft) for i in range(num_sources+1)]
+        speaker_audio = []
+        ground_truth_audio = []
+        # lws_processor=lws.lws(self.window_size,self.hop_length, mode="speech")
+
+        # form a ground truth mask, so we can mask the mixtures and compare how they sound to our output
+        ground_truth_mask = np.reshape(self.y_labels, (-1, self.num_input))
+        ground_truth_mask = np.transpose(ground_truth_mask)
+
+        print("--applying mask...")
+        for speaker in range(0, num_sources+1):
+
+            # apply mask for each speaker to the mixture spectrogram
+            for i in range(mixture_stft.shape[0]):
+                for j in range(mixture_stft.shape[1]):
+                    if int_mask[i, j] != speaker:
+                        speaker_stfts[speaker][i, j] = 0+0j
+                    if ground_truth_mask[i, j] != speaker:
+                        ground_truth_stfts[speaker][i, j] = 0+0j
+
+            # reconstruct phase
+            # print("--reconstructing phase...")
+            # speaker_stfts[speaker] = lws_processor.run_lws(speaker_stfts[speaker])
+
+            # save to file
+            print("--saving to file...")
+            speaker_audio.append(librosa.istft(speaker_stfts[speaker], hop_length=self.hop_length))
+            librosa.output.write_wav("speaker_{}.wav".format(speaker), speaker_audio[speaker], 8000)
+
+            ground_truth_audio.append(librosa.istft(ground_truth_stfts[speaker], hop_length=self.hop_length))
+            librosa.output.write_wav("speaker_{}_true.wav".format(speaker), ground_truth_audio[speaker], 8000)
+
+            print("audio files saved.")
 
 
 
+
+        # TODO: Use Mask and SeparationBase class stuff
+        # TODO: Figure out what to return: Raw audio? Masks?
 
 
 
@@ -338,7 +422,7 @@ class DeepClustering():
             # est_mask = tf.cast(tf.reshape(y_pred,(dc_obj.batch_size, dc_obj.num_frames, dc_obj.num_bins, embd_dim)),tf.float32)
 
             # form the estimated mask tensor
-            est_mask = tf.cast(tf.reshape(y_pred,(-1,embd_dim)),tf.float32)
+            est_mask = tf.cast(tf.reshape(tf.reshape(y_pred, (-1, dc_obj.frame_size, dc_obj.num_input, embd_dim)),(-1,embd_dim)),tf.float32)
 
             # print("Y_Pred Shape: {}".format(y_pred.get_shape()))
             # print("Est_Mask Shape: {}".format(est_mask.get_shape()))
@@ -367,16 +451,18 @@ class DeepClustering():
             return dc_loss_norm
 
 
-dc_obj = DeepClustering()
-dc_obj.load_data('DSD_examples')
-dc_obj.prepare_data()
 
-# dc_obj = pickle.load(open('dc_obj', 'rb'))
+
+# dc_obj = DeepClustering()
+# dc_obj.load_data('DSD_examples')
+# dc_obj.prepare_data()
+
+dc_obj = pickle.load(open('dc_obj', 'rb'))
 # dc_obj.loss_function_test()
 dc_obj.create_model()
-dc_obj.print_model()
-dc_obj.train_model()
-dc_obj.predict_from_input()
+# dc_obj.print_model()
+# dc_obj.train_model()
+dc_obj.separate("mixture.wav", 2)
 
 
 
